@@ -1,0 +1,59 @@
+services:
+  - type: web
+    name: ai-receptionist
+    runtime: node
+    # Free plan 15 min idle ke baad so jaata hai -> pehli call pe 30-60s cold start
+    # -> Exotel WebSocket fail. Live phone line ke liye paid plan zaroori.
+    plan: starter
+    # Callers + Exotel India me hain; Oregon (USA) se har turn pe ~250ms extra
+    region: singapore
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: TZ
+        value: Asia/Kolkata
+      - key: PORT
+        value: 10000
+      - key: BASE_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: DASHBOARD_API_KEY
+        generateValue: true
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB
+        value: ai_receptionist
+      - key: EXOTEL_API_KEY
+        sync: false
+      - key: EXOTEL_API_TOKEN
+        sync: false
+      - key: EXOTEL_SID
+        sync: false
+      - key: EXOTEL_PHONE_NUMBER
+        sync: false
+      - key: EXOTEL_APP_ID
+        sync: false
+      - key: HUMAN_HANDOFF
+        value: "false"
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: qwen/qwen3.8-27b
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        value: EXAVITQu4vr4xnSDxMaL
+      - key: TTS_VOICE
+        value: hi-IN-SwaraNeural
+      - key: SLOT_CAPACITY
+        value: "8"

@@ -1,0 +1,28 @@
+{
+  "name": "ai-realestate-agent",
+  "version": "1.0.0",
+  "description": "Hindi AI Calling Agent & Site Visit Booking for Real Estate over Exotel telephony",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/unit.test.js test/call.test.js",
+    "generate-pdf": "node scripts/generatePropertyPdf.js",
+    "clear-db": "node scripts/clearDatabase.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "mongoose": "^8.9.5",
+    "mpg123-decoder": "^1.0.3",
+    "msedge-tts": "^2.0.8",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "pdfkit": "^0.20.2"
+  },
+  "engines": {
+    "node": ">=20.3"
+  }
+}
