@@ -1,5 +1,5 @@
 const express = require("express");
-const hospitalConfig = require("../config/hospitalConfig");
+const realestateConfig = require("../config/realestateConfig");
 const CallLog = require("../models/CallLog");
 const { getSession } = require("../utils/sessions");
 const { getAIReply, parseReply } = require("../services/aiService");
@@ -32,7 +32,7 @@ router.all("/greeting", async (req, res) => {
     if (from) session.callerPhone = from;
   }
 
-  res.type("text/plain; charset=utf-8").send(hospitalConfig.greeting);
+  res.type("text/plain; charset=utf-8").send(realestateConfig.greeting);
 });
 
 /**
@@ -55,7 +55,7 @@ router.all(["/inbound", "/passthru"], async (req, res) => {
       console.error("[/exotel/passthru] AI error:", err.message);
     }
   }
-  res.type("text/plain; charset=utf-8").send(hospitalConfig.greeting);
+  res.type("text/plain; charset=utf-8").send(realestateConfig.greeting);
 });
 
 /**

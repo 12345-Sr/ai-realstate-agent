@@ -6,10 +6,10 @@
  * ki doctor us din baithte hain, slot bhara hai, ya date bhi valid hai. README
  * me "slot full" handling likhi thi par code me thi hi nahi.
  */
-const cfg = require("../config/hospitalConfig");
+const cfg = require("../config/realestateConfig");
 const {
   getClock, addDaysIso, weekdayOfIso, isOpdDay, relativeDayLabel, spokenDate, DAY_HI,
-} = require("./hospitalKnowledge");
+} = require("./propertyKnowledge");
 
 // Models lazily (tests me stub karne ke liye)
 const models = {

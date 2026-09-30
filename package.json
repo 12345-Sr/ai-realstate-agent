@@ -6,10 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js",
-    "test": "node --test test/unit.test.js test/call.test.js",
-    "generate-pdf": "node scripts/generatePropertyPdf.js",
-    "clear-db": "node scripts/clearDatabase.js"
+    "dev": "node --watch server.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
@@ -18,9 +15,6 @@
     "mpg123-decoder": "^1.0.3",
     "msedge-tts": "^2.0.8",
     "ws": "^8.18.0"
-  },
-  "devDependencies": {
-    "pdfkit": "^0.20.2"
   },
   "engines": {
     "node": ">=20.3"

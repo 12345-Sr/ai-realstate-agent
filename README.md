@@ -36,22 +36,14 @@ Caller ──PSTN──► Exotel number ──► Voicebot applet ──wss─�
 ```bash
 cp .env.example .env     # values bharo
 npm install
-npm test                 # Unit tests + call simulation tests (14 tests)
 npm run dev              # Dev server with watch mode
 # or
 npm start                # Production server
 ```
 
-## Generating Property PDF Catalog
-
-```bash
-npm run generate-pdf
-```
-PDF catalog `data/realestate_properties.pdf` generate ho jayega aur memory brain mein load ho jayega.
-
 ## Projects & Configuration
 
-Sirf `config/realestateConfig.js` (ya `config/hospitalConfig.js`) edit karein: projects, pricing, amenities, visit shifts, FAQs. Prompt aur availability dynamically isi single source of truth se generate hote hain.
+Sirf `config/realestateConfig.js` edit karein: projects, pricing, amenities, visit shifts, FAQs. Prompt aur availability dynamically isi single source of truth se generate hote hain.
 
 ## API (header `X-API-Key: $DASHBOARD_API_KEY`)
 

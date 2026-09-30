@@ -13,8 +13,8 @@
  *  - Gemini key URL (?key=) me thi -> logs me leak. Ab header me.
  *  - Gemini: first message "model" role / consecutive same roles -> 400. Normalised.
  */
-const cfg = require("../config/hospitalConfig");
-const { buildKnowledgeText, getClock, spokenDate } = require("./hospitalKnowledge");
+const cfg = require("../config/realestateConfig");
+const { buildKnowledgeText, getClock, spokenDate } = require("./propertyKnowledge");
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const TAGS = {

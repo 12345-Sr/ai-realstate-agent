@@ -22,11 +22,11 @@
  *  7. Playback end "mark" event se track; end-of-turn 1.4 s -> 0.8 s.
  */
 const { WebSocketServer } = require("ws");
-const hospitalConfig = require("../config/hospitalConfig");
+const realestateConfig = require("../config/realestateConfig");
 const { getSession, clearSession } = require("../utils/sessions");
 const { extractPatientNameFromSpeech, parseSpelledName, toEnglishName } = require("../utils/transliterate");
 const { applyCallerTurn, applyAiDraft, isInvalidPatientName, classifyConfirmation } = require("../utils/nameState");
-const { getClock, relativeDayLabel } = require("./hospitalKnowledge");
+const { getClock, relativeDayLabel } = require("./propertyKnowledge");
 const { calculatePcmRms, analyzeVoiceActivity } = require("../utils/audioDsp");
 
 const heuristics = { parseSpelledName, extractPatientNameFromSpeech };
@@ -46,14 +46,14 @@ const CONF = {
 };
 
 const PHRASES = {
-  greeting: hospitalConfig.greeting,
+  greeting: realestateConfig.greeting,
   fillers: ["हम्म, एक सेकंड।", "जी, देख रही हूँ।", "अच्छा, एक पल।"],
   reprompts: ["हेलो, क्या आप लाइन पर हैं?", "मुझे आपकी आवाज़ नहीं आ रही, थोड़ा ज़ोर से बोलिए।"],
   goodbye: "लगता है लाइन में दिक्कत है। आप कभी भी दोबारा कॉल कर सकते हैं। धन्यवाद!",
   sorry: "माफ़ कीजिए, आवाज़ थोड़ी कट गई। एक बार फिर से बताएँगे?",
   emergency: "कृपया तुरंत आपातकालीन हेल्पलाइन 112 पर कॉल करें।",
   emergencyFollowUp: "क्या आप किसी प्रॉपर्टी की जानकारी या साइट विज़िट के लिए बात करना चाहते हैं?",
-  handoff: hospitalConfig.handoffReply,
+  handoff: realestateConfig.handoffReply,
 };
 
 const EMERGENCY_RE =
