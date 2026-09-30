@@ -1,11 +1,11 @@
 services:
   - type: web
-    name: ai-receptionist
+    name: ai-realestate-agent
     runtime: node
     # Free plan 15 min idle ke baad so jaata hai -> pehli call pe 30-60s cold start
-    # -> Exotel WebSocket fail. Live phone line ke liye paid plan zaroori.
+    # -> Exotel WebSocket fail. Live phone line ke liye paid plan (Starter) zaroori.
     plan: starter
-    # Callers + Exotel India me hain; Oregon (USA) se har turn pe ~250ms extra
+    # Callers + Exotel India me hain; Singapore region is fastest for India telephony
     region: singapore
     buildCommand: npm ci
     startCommand: npm start
@@ -28,7 +28,7 @@ services:
       - key: MONGODB_URI
         sync: false
       - key: MONGODB_DB
-        value: ai_receptionist
+        value: ai_realestate
       - key: EXOTEL_API_KEY
         sync: false
       - key: EXOTEL_API_TOKEN
