@@ -109,7 +109,7 @@ function anySignal(signals) {
 }
 
 async function callGroq(messages, systemPrompt, signal) {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = (process.env.GROQ_API_KEY || "").replace(/^GROQ_API_KEY=/, "").trim();
   if (!apiKey) return null;
   const body = {
     model: process.env.GROQ_MODEL || "qwen/qwen3-32b",

@@ -101,14 +101,16 @@ async function transcribePcmAudio(pcmBuffer, sampleRate = 8000, { signal } = {})
   formData.append("temperature", "0");
   formData.append(
     "prompt",
-    "नमस्ते, सिटी केयर हॉस्पिटल, अपॉइंटमेंट, डॉक्टर अनन्या शर्मा, डॉक्टर रोहित वर्मा, डॉक्टर संजय गुप्ता, डॉक्टर प्रिया नायर, सुबह दस बजे, दोपहर दो बजे, शाम साढ़े पाँच बजे, आज, कल, बुधवार, समय, बुखार, छाती में दर्द।"
+    "नमस्ते, सिटी हाइट्स रियल्टी, रिया, प्रॉपर्टी, फ्लैट, 2 BHK, 3 BHK, विला, प्लॉट, कमर्शियल, सिटी ग्रीन्स, रॉयल पाम विला, ग्रीन वैली, अपेक्स प्लाजा, साइट विज़िट, सुबह दस बजे, दोपहर दो बजे, शाम साढ़े पाँच बजे, आज, कल, बुकिंग, लोन, रेरा।"
   );
+
+  const apiKey = (process.env.GROQ_API_KEY || "").replace(/^GROQ_API_KEY=/, "").trim();
 
   try {
     const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: formData,
       // 15s pehle tha — caller 15 second chup sunta. 6s ke baad "phir se boliye" behtar hai.
