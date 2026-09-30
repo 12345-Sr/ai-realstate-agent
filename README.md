@@ -21,7 +21,7 @@ Caller ──PSTN──► Exotel number ──► Voicebot applet ──wss─�
 
 | Area | Real Estate Implementation |
 |---|---|
-| Agency & Advisor | **सिटी हाइट्स रियल्टी** (City Heights Realty, Kanpur), Agent: **रिया** (Riya) |
+| Agency & Advisor | **सिटी हाइट्स रियल्टी** (City Heights Realty, Kanpur), Agent: **मोनिका** (Monika) |
 | Projects & Catalog | Luxury Flats (City Greens), Villas (Royal Palm), Plots (Green Valley), Commercial (Apex Plaza) |
 | Site Visit Booking | Morning (10:00 AM), Afternoon (2:00 PM), Evening (5:30 PM) |
 | Document / Brain | `data/realestate_properties.pdf` + `config/realestateConfig.js` memory brain |

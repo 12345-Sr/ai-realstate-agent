@@ -33,15 +33,15 @@ const heuristics = { parseSpelledName, extractPatientNameFromSpeech };
 
 const num = (v, d) => (v === undefined || v === "" || isNaN(Number(v)) ? d : Number(v));
 const CONF = {
-  endOfTurnMs: num(process.env.END_OF_TURN_MS, 800),
+  endOfTurnMs: num(process.env.END_OF_TURN_MS, 850),
   maxUtteranceMs: num(process.env.MAX_UTTERANCE_MS, 15000),
   bargeIn: process.env.BARGE_IN !== "false",
-  bargeInMs: num(process.env.BARGE_IN_MS, 300),
-  bargeInGraceMs: num(process.env.BARGE_IN_GRACE_MS, 500),
-  fillerAfterMs: num(process.env.FILLER_AFTER_MS, 1300),
+  bargeInMs: num(process.env.BARGE_IN_MS, 180),
+  bargeInGraceMs: num(process.env.BARGE_IN_GRACE_MS, 200),
+  fillerAfterMs: num(process.env.FILLER_AFTER_MS, 2200),
   idleRepromptMs: num(process.env.IDLE_REPROMPT_MS, 9000),
   maxReprompts: num(process.env.MAX_REPROMPTS, 2),
-  echoCooldownMs: num(process.env.ECHO_COOLDOWN_MS, 250),
+  echoCooldownMs: num(process.env.ECHO_COOLDOWN_MS, 200),
   handoff: process.env.HUMAN_HANDOFF === "true",
 };
 
@@ -245,7 +245,7 @@ function handleCall(ws, deps, activeCalls) {
     // Bot is talking: only a clear, sustained voice counts as barge-in
     if (isBotSpeaking()) {
       if (!CONF.bargeIn || Date.now() - current.startedAt < CONF.bargeInGraceMs) return;
-      const bargeThr = Math.max(1500, speechThr * 1.6);
+      const bargeThr = Math.max(650, speechThr * 1.15);
       bargeLoudMs = rms > bargeThr ? bargeLoudMs + chunkMs : Math.max(0, bargeLoudMs - chunkMs);
       if (bargeLoudMs >= CONF.bargeInMs) {
         stopPlayback("barge-in");
