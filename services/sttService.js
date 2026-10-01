@@ -72,8 +72,8 @@ const { cleanAndIsolateVoice } = require("../utils/audioDsp");
  * Transcribes audio buffer using Groq Whisper after deep DSP voice isolation and noise gating.
  */
 async function transcribePcmAudio(pcmBuffer, sampleRate = 8000, { signal } = {}) {
-  // Discard audio shorter than 0.35 seconds (line noise, clicks, breaths)
-  const minBytes = Math.floor(sampleRate * 2 * 0.35);
+  // Discard audio shorter than 0.15 seconds (line noise, clicks) while preserving single-word answers ("हाँ", "जी", "फ्लैट")
+  const minBytes = Math.floor(sampleRate * 2 * 0.15);
   if (!pcmBuffer || pcmBuffer.length < minBytes) {
     return "";
   }

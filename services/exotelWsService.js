@@ -33,15 +33,15 @@ const heuristics = { parseSpelledName, extractPatientNameFromSpeech };
 
 const num = (v, d) => (v === undefined || v === "" || isNaN(Number(v)) ? d : Number(v));
 const CONF = {
-  endOfTurnMs: num(process.env.END_OF_TURN_MS, 850),
+  endOfTurnMs: num(process.env.END_OF_TURN_MS, 950),
   maxUtteranceMs: num(process.env.MAX_UTTERANCE_MS, 15000),
   bargeIn: process.env.BARGE_IN !== "false",
-  bargeInMs: num(process.env.BARGE_IN_MS, 180),
-  bargeInGraceMs: num(process.env.BARGE_IN_GRACE_MS, 200),
-  fillerAfterMs: num(process.env.FILLER_AFTER_MS, 2200),
+  bargeInMs: num(process.env.BARGE_IN_MS, 320),
+  bargeInGraceMs: num(process.env.BARGE_IN_GRACE_MS, 400),
+  fillerAfterMs: num(process.env.FILLER_AFTER_MS, 2800),
   idleRepromptMs: num(process.env.IDLE_REPROMPT_MS, 9000),
   maxReprompts: num(process.env.MAX_REPROMPTS, 2),
-  echoCooldownMs: num(process.env.ECHO_COOLDOWN_MS, 200),
+  echoCooldownMs: num(process.env.ECHO_COOLDOWN_MS, 80),
   handoff: process.env.HUMAN_HANDOFF === "true",
 };
 
@@ -211,7 +211,18 @@ function handleCall(ws, deps, activeCalls, req) {
         if (ahead > LEAD_MS) break;
         let frame = p.pending.subarray(0, FRAME_BYTES);
         p.pending = p.pending.subarray(frame.length);
-        if (frame.length < FRAME_BYTES) frame = Buffer.concat([frame, Buffer.alloc(FRAME_BYTES - frame.length)]);
+        if (frame.length < FRAME_BYTES) {
+          const actualFrame = Buffer.from(frame);
+          const sampleCount = Math.floor(actualFrame.length / 2);
+          const rampSamples = Math.min(40, sampleCount);
+          for (let i = 0; i < rampSamples; i++) {
+            const idx = (sampleCount - rampSamples + i) * 2;
+            const val = actualFrame.readInt16LE(idx);
+            const factor = (rampSamples - i) / rampSamples;
+            actualFrame.writeInt16LE(Math.round(val * factor), idx);
+          }
+          frame = Buffer.concat([actualFrame, Buffer.alloc(FRAME_BYTES - actualFrame.length)]);
+        }
         if (!p.startAt) p.startAt = now;
         sendMedia(frame);
         p.sentMs += FRAME_MS;
@@ -286,16 +297,16 @@ function handleCall(ws, deps, activeCalls, req) {
 
     preRoll.push(chunk);
     preRollMs += chunkMs;
-    while (preRollMs > 240 && preRoll.length > 1) preRollMs -= (preRoll.shift().length / (sampleRate * 2)) * 1000;
+    while (preRollMs > 360 && preRoll.length > 1) preRollMs -= (preRoll.shift().length / (sampleRate * 2)) * 1000;
 
-    const speechThr = Math.max(700, Math.min(2400, noiseFloor * 2.2 + 200));
-    const keepThr = speechThr * 0.65;
+    const speechThr = Math.max(380, Math.min(1800, noiseFloor * 1.6 + 100));
+    const keepThr = speechThr * 0.55;
 
     // Bot is talking: only a clear, sustained voice counts as barge-in
     if (isBotSpeaking()) {
       if (current?.noBargeIn) return;
       if (!CONF.bargeIn || Date.now() - current.startedAt < CONF.bargeInGraceMs) return;
-      const bargeThr = Math.max(650, speechThr * 1.15);
+      const bargeThr = Math.max(700, speechThr * 1.25);
       bargeLoudMs = rms > bargeThr ? bargeLoudMs + chunkMs : Math.max(0, bargeLoudMs - chunkMs);
       if (bargeLoudMs >= CONF.bargeInMs) {
         stopPlayback("barge-in");
@@ -311,7 +322,7 @@ function handleCall(ws, deps, activeCalls, req) {
     if (!capturing) {
       if (rms > speechThr) {
         loudRun += chunkMs;
-        if (loudRun >= 60) {
+        if (loudRun >= 40) {
           capturing = true;
           clearIdle();
           captureChunks = [...preRoll];
@@ -346,7 +357,7 @@ function handleCall(ws, deps, activeCalls, req) {
   let handingOff = false;
 
   function onUtterance(pcm) {
-    if (pcm.length < sampleRate * 2 * 0.3) return;
+    if (pcm.length < sampleRate * 2 * 0.15) return;
     const vad = analyzeVoiceActivity(pcm, sampleRate);
     if (!vad.isGenuineSpeech) {
       armIdle();
