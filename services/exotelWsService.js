@@ -146,10 +146,6 @@ function handleCall(ws, deps, activeCalls, req) {
       const sid = streamSid || "default";
       payload.stream_sid = sid;
       payload.streamSid = sid;
-      if (payload.media && typeof payload.media === "object") {
-        payload.media.stream_sid = sid;
-        payload.media.streamSid = sid;
-      }
       try {
         ws.send(JSON.stringify(payload));
       } catch (err) {
@@ -159,40 +155,23 @@ function handleCall(ws, deps, activeCalls, req) {
   };
   const sendMedia = (buf) => {
     sentFrames++;
-    chunkCount++;
     if (sentFrames === 1 || sentFrames % 40 === 0) {
       log(`🔊 Outbound audio frame #${sentFrames} (${buf.length}B, sid=${streamSid})`);
     }
-    const sid = streamSid || "default";
     send({
       event: "media",
-      stream_sid: sid,
-      streamSid: sid,
       media: {
         payload: buf.toString("base64"),
-        chunk: chunkCount,
-        timestamp: String(Math.round(sentFrames * FRAME_MS)),
-        stream_sid: sid,
-        streamSid: sid,
       },
     });
   };
   const sendClear = () => {
-    const sid = streamSid || "default";
-    send({
-      event: "clear",
-      stream_sid: sid,
-      streamSid: sid,
-      clear: { stream_sid: sid, streamSid: sid },
-    });
+    send({ event: "clear" });
   };
   const sendMark = (name) => {
-    const sid = streamSid || "default";
     send({
       event: "mark",
-      stream_sid: sid,
-      streamSid: sid,
-      mark: { name, stream_sid: sid, streamSid: sid },
+      mark: { name },
     });
   };
 
