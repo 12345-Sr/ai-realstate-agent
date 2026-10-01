@@ -254,8 +254,8 @@ function handleCall(ws, deps, activeCalls) {
     preRollMs += chunkMs;
     while (preRollMs > 240 && preRoll.length > 1) preRollMs -= (preRoll.shift().length / (sampleRate * 2)) * 1000;
 
-    const speechThr = Math.max(700, Math.min(2400, noiseFloor * 2.2 + 200));
-    const keepThr = speechThr * 0.65;
+    const speechThr = Math.max(300, Math.min(1800, noiseFloor * 1.8 + 80));
+    const keepThr = speechThr * 0.6;
 
     // Bot is talking: only a clear, sustained voice counts as barge-in
     if (isBotSpeaking()) {
@@ -312,17 +312,22 @@ function handleCall(ws, deps, activeCalls) {
   let handingOff = false;
 
   function onUtterance(pcm) {
-    if (pcm.length < sampleRate * 2 * 0.3) return;
+    const durMs = Math.round((pcm.length / (sampleRate * 2)) * 1000);
+    const rms = Math.round(calculatePcmRms(pcm));
+    if (pcm.length < sampleRate * 2 * 0.25) return;
     const vad = analyzeVoiceActivity(pcm, sampleRate);
     if (!vad.isGenuineSpeech) {
+      log(`🔇 Utterance discarded: low energy (${durMs}ms, rms=${rms})`);
       armIdle();
       return;
     }
+    log(`🎙️ Speech captured (${durMs}ms, rms=${rms}) -> sending to STT`);
     // STT serialized => transcripts stay in spoken order
     sttChain = sttChain
       .then(() => deps.stt(pcm, sampleRate))
       .then((text) => {
         if (!text || text.length < 2) {
+          log(`🔇 STT returned empty/silence (${durMs}ms)`);
           armIdle();
           return;
         }
