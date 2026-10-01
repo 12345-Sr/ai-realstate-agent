@@ -352,7 +352,10 @@ function handleCall(ws, deps, activeCalls) {
       await handoff("caller_request");
       return;
     }
-    if (USER_GOODBYE_RE.test(userText)) {
+    const isFirstTurn = !session.messages || session.messages.filter((m) => m.role === "user").length === 0;
+
+    // Caller goodbye: only allowed AFTER turn 1 (never hang up on the opening greeting)
+    if (!isFirstTurn && USER_GOODBYE_RE.test(userText)) {
       commitUser(turn, userText);
       commitAssistant(PHRASES.closing);
       await play(PHRASES.closing, { cacheable: true, noBargeIn: true });
@@ -400,7 +403,8 @@ function handleCall(ws, deps, activeCalls) {
     }
     if (!speech) speech = PHRASES.sorry;
 
-    const isClosing = Boolean(endCall || CALL_CLOSE_RE.test(speech));
+    // Never auto-close the call on turn 1
+    const isClosing = !isFirstTurn && Boolean(endCall || CALL_CLOSE_RE.test(speech));
 
     commitAssistant(speech);
     if (fillerPlayback) await fillerPlayback; // filler ko beech me mat kaato

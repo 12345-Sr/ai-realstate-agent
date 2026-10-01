@@ -97,13 +97,12 @@ async function transcribePcmAudio(pcmBuffer, sampleRate = 8000, { signal } = {})
   formData.append("file", blob, "audio.wav");
   // whisper-large-v3 = Hindi me zyada accurate; "-turbo" = tez. Env se chuno.
   formData.append("model", process.env.STT_MODEL || "whisper-large-v3");
-  if (process.env.STT_LANGUAGE) {
-    formData.append("language", process.env.STT_LANGUAGE);
-  }
+  // Whisper default hi locks recognition to Hindi/Devanagari and stops foreign language hallucinations
+  formData.append("language", process.env.STT_LANGUAGE || "hi");
   formData.append("temperature", "0");
   formData.append(
     "prompt",
-    "नमस्ते, मैं मोनिका हूँ, आपकी प्रॉपर्टी असिस्टेंट। आज आप कैसे हैं? ठीक हूँ, अच्छा हूँ, बढ़िया, प्रॉपर्टी, फ्लैट, 2 BHK, 3 BHK, विला, प्लॉट, कमर्शियल, साइट विज़िट, बजट, सिटी ग्रीन्स, रॉयल पाम विला, कानपुर, City Heights Realty, apartment, villa, plot."
+    "नमस्ते, मैं मोनिका हूँ, आपकी प्रॉपर्टी असिस्टेंट। आज आप कैसे हैं? ठीक हूँ, अच्छा हूँ, बढ़िया, प्रॉपर्टी, फ्लैट, 2 BHK, 3 BHK, विला, प्लॉट, कमर्शियल, साइट विज़िट, बजट, सिटी ग्रीन्स, रॉयल पाम विला, कानपुर, City Heights Realty."
   );
 
   const apiKey = (process.env.GROQ_API_KEY || "").replace(/^GROQ_API_KEY=/, "").trim();
@@ -127,6 +126,17 @@ async function transcribePcmAudio(pcmBuffer, sampleRate = 8000, { signal } = {})
 
     const data = await res.json();
     let text = (data.text || "").trim();
+
+    // Filter foreign script hallucinations (Tamil, Telugu, Malayalam, Arabic, etc.)
+    if (/[\u0B80-\u0BFF\u0C00-\u0C7F\u0D00-\u0D7F\u0A80-\u0AFF\u0600-\u06FF]/i.test(text)) {
+      console.log(`[sttService] 🔇 Dropped foreign script hallucination: "${text}"`);
+      return "";
+    }
+    // Filter non-Indian/hallucinated noise words
+    if (/adi[oó]s|manejar|obrigad[oa]|por\s*favor|subtitles/i.test(text)) {
+      console.log(`[sttService] 🔇 Dropped foreign hallucination: "${text}"`);
+      return "";
+    }
 
     // Guard against Whisper repeating prompt hallucinations on background silence / noise
     if (
