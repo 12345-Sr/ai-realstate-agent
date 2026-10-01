@@ -14,8 +14,13 @@ const TTL_MS = 2 * 60 * 60 * 1000;
 function newSession() {
   return {
     messages: [], // { role: 'user' | 'assistant', content }
+    clientName: null,
     patientName: null,
     nameConfirmed: false,
+    propertyType: null, // "Flat" | "Villa" | "Plot" | "Commercial"
+    budget: null,       // e.g. "45 लाख" or "50-60 लाख"
+    preferredLocation: null, // e.g. "Civil Lines" or "Ganga Barrage"
+    projectName: null,  // e.g. "City Greens Residency"
     doctorName: null,
     date: null,
     selectedTime: null,

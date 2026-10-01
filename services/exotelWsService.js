@@ -483,8 +483,16 @@ function handleCall(ws, deps, activeCalls, req) {
     if (!session.nameConfirmed && /[ऀ-ॿ]/.test(clientNameInput || "") && !isInvalidPatientName(clientNameInput)) {
       session.patientNameSpoken = clientNameInput.trim();
     }
+    if (draft.propertyType) session.propertyType = draft.propertyType;
+    if (draft.budget) session.budget = draft.budget;
+    if (draft.preferredLocation || draft.location) {
+      session.preferredLocation = draft.preferredLocation || draft.location;
+    }
     const doc = booking.normalizeDoctor(projectNameInput);
-    if (doc) session.doctorName = doc.name;
+    if (doc) {
+      session.doctorName = doc.name;
+      session.projectName = doc.name;
+    }
     const shift = booking.normalizeShift(draft.time);
     if (shift) session.selectedTime = shift.time;
     const date = booking.resolveDate(draft.date);

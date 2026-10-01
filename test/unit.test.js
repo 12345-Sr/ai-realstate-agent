@@ -147,6 +147,16 @@ test("parseReply survives think tags, truncation, missing tags", () => {
   assert.equal(p.speech, "");
 });
 
+test("parseReply extracts real estate preferences into draft memory", () => {
+  const raw = `बहुत बढ़िया! सिविल लाइंस में हमारी सिटी ग्रीन्स रेजिडेंसी आपके लिए सही रहेगी।
+<<DRAFT_JSON>>{"clientName":"राहुल शर्मा","nameConfirmed":true,"propertyType":"Flat","preferredLocation":"Civil Lines","budget":"₹45-50 लाख","projectName":"City Greens Residency","date":"2026-10-02","time":"10:00 AM","reason":"2 BHK Flat"}<<END_DRAFT_JSON>>`;
+  const p = parseReply(raw);
+  assert.equal(p.draft.clientName, "राहुल शर्मा");
+  assert.equal(p.draft.propertyType, "Flat");
+  assert.equal(p.draft.preferredLocation, "Civil Lines");
+  assert.equal(p.draft.projectName, "City Greens Residency");
+});
+
 test("parseReply detects <<END_CALL>> tag and the closing-phrase fallback", () => {
   let p = parseReply("बात करने के लिए धन्यवाद, आपका दिन शुभ हो!\n<<END_CALL>>");
   assert.equal(p.endCall, true);
