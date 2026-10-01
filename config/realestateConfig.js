@@ -16,9 +16,10 @@ module.exports = {
 
   // Calling Agent Name
   assistantName: "मोनिका",
+  assistantNameEn: "Monica",
 
-  greeting:
-    "नमस्ते, सिटी हाइट्स रियल्टी से मोनिका बात कर रही हूँ। बताइए, आज आप 2 BHK, 3 BHK या विला — किस तरह की प्रॉपर्टी की जानकारी चाहते हैं?",
+  // Master System Prompt (PDF Section 3 - Hindi equivalent of "Hi, I'm Monica, your property assistant. How are you today?"):
+  greeting: "नमस्ते! मैं मोनिका हूँ, आपकी प्रॉपर्टी असिस्टेंट। आज आप कैसे हैं?",
 
   // Site visit shifts (10:00 AM, 2:00 PM, 5:30 PM)
   shifts: [

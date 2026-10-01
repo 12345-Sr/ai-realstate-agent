@@ -56,7 +56,7 @@ function sanitizeSpeechText(text) {
   s = s.replace(/बजे\s+बजे/g, "बजे").replace(/₹\s*500|500\s*रुपये|rs\.?\s*500/gi, "पाँच सौ रुपये");
 
   // Natural micro-pauses after discourse markers
-  s = s.replace(new RegExp(`${NB}(नमस्ते|अच्छा|ठीक है|जी हाँ|जी बिल्कुल|धन्यवाद|हम्म)${NA}(?!\\s*[,.?!।])`, "g"), "$1,");
+  s = s.replace(new RegExp(`${NB}(नमस्ते|अच्छा|ठीक है|जी हाँ|जी बिल्कुल|धन्यवाद|हम्म|Hello|Hi|Sure|Got it|Absolutely|I understand|Great|Perfect|Thank you)${NA}(?!\\s*[,.?!।])`, "gi"), "$1,");
 
   return s
     .replace(/\s+/g, " ")

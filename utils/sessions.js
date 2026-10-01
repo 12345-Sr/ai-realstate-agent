@@ -23,6 +23,8 @@ function newSession() {
     appointmentBooked: false,
     appointments: [],
     callerPhone: null,
+    region: null,
+    language: null,
     createdAt: Date.now(),
     touchedAt: Date.now(),
   };
@@ -46,9 +48,31 @@ function activeSessionCount() {
   return sessions.size;
 }
 
+/**
+ * Detects client region from phone number based on country code.
+ * Master System Prompt (Section 1):
+ * +91 -> INDIA
+ * +971 -> UAE
+ * Anything else -> UNKNOWN
+ */
+function detectRegion(phone) {
+  if (!phone) return "UNKNOWN";
+  const cleaned = String(phone).replace(/[^\d+]/g, "");
+  if (cleaned.startsWith("+971") || cleaned.startsWith("971")) return "UAE";
+  if (
+    cleaned.startsWith("+91") ||
+    cleaned.startsWith("91") ||
+    (cleaned.length === 10 && /^[6-9]/.test(cleaned)) ||
+    (cleaned.length === 11 && cleaned.startsWith("0"))
+  ) {
+    return "INDIA";
+  }
+  return "UNKNOWN";
+}
+
 setInterval(() => {
   const cutoff = Date.now() - TTL_MS;
   for (const [sid, s] of sessions) if (s.touchedAt < cutoff) sessions.delete(sid);
 }, 10 * 60 * 1000).unref();
 
-module.exports = { getSession, clearSession, activeSessionCount };
+module.exports = { getSession, clearSession, activeSessionCount, detectRegion };

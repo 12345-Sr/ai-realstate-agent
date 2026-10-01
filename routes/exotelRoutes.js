@@ -1,7 +1,7 @@
 const express = require("express");
 const realestateConfig = require("../config/realestateConfig");
 const CallLog = require("../models/CallLog");
-const { getSession } = require("../utils/sessions");
+const { getSession, detectRegion } = require("../utils/sessions");
 const { getAIReply, parseReply } = require("../services/aiService");
 const { requireApiKey } = require("../middleware/auth");
 
@@ -29,7 +29,10 @@ router.all("/greeting", async (req, res) => {
       { upsert: true }
     ).catch((err) => console.error("[exotel] DB log error:", err.message));
     const session = getSession(callSid);
-    if (from) session.callerPhone = from;
+    if (from) {
+      session.callerPhone = from;
+      session.region = detectRegion(from);
+    }
   }
 
   res.type("text/plain; charset=utf-8").send(realestateConfig.greeting);
@@ -43,7 +46,10 @@ router.all(["/inbound", "/passthru"], async (req, res) => {
   const callSid = params.CallSid || params.CallUUID || `EXO_${Date.now()}`;
   const digits = params.Digits || params.digits;
   const session = getSession(callSid);
-  if (!session.callerPhone && params.From) session.callerPhone = params.From;
+  if (!session.callerPhone && params.From) {
+    session.callerPhone = params.From;
+    session.region = detectRegion(params.From);
+  }
 
   if (digits) {
     session.messages.push({ role: "user", content: `Caller ne option ${digits} dabaya` });

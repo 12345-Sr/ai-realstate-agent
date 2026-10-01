@@ -23,7 +23,7 @@
  */
 const { WebSocketServer } = require("ws");
 const realestateConfig = require("../config/realestateConfig");
-const { getSession, clearSession } = require("../utils/sessions");
+const { getSession, clearSession, detectRegion } = require("../utils/sessions");
 const { extractPatientNameFromSpeech, parseSpelledName, toEnglishName } = require("../utils/transliterate");
 const { applyCallerTurn, applyAiDraft, isInvalidPatientName, classifyConfirmation } = require("../utils/nameState");
 const { getClock, relativeDayLabel } = require("./propertyKnowledge");
@@ -521,7 +521,10 @@ function handleCall(ws, deps, activeCalls) {
       if (!res.ok) return;
       const c = (await res.json())?.Call;
       if (!c) return;
-      if (c.From && session && !session.callerPhone) session.callerPhone = c.From;
+      if (c.From && session && !session.callerPhone) {
+        session.callerPhone = c.From;
+        if (!session.region) session.region = detectRegion(c.From);
+      }
       const duration = parseInt(c.Duration, 10) || 0;
       await db(CallLog.updateOne({ callSid }, { $set: { from: c.From, to: c.To, ...(duration ? { durationSeconds: duration } : {}) } }));
     } catch (err) {
@@ -540,7 +543,10 @@ function handleCall(ws, deps, activeCalls) {
 
     session = getSession(callSid);
     const from = st.from || st.custom_parameters?.from || data.from;
-    if (from) session.callerPhone = from;
+    if (from) {
+      session.callerPhone = from;
+      session.region = detectRegion(from);
+    }
     log(`📞 start from=${from || "?"} rate=${sampleRate} frame=${FRAME_BYTES}B`);
 
     if (!session.messages.length || session.messages[session.messages.length - 1].content !== PHRASES.greeting) {
