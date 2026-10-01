@@ -33,15 +33,15 @@ const heuristics = { parseSpelledName, extractPatientNameFromSpeech };
 
 const num = (v, d) => (v === undefined || v === "" || isNaN(Number(v)) ? d : Number(v));
 const CONF = {
-  endOfTurnMs: num(process.env.END_OF_TURN_MS, 850),
+  endOfTurnMs: num(process.env.END_OF_TURN_MS, 800),
   maxUtteranceMs: num(process.env.MAX_UTTERANCE_MS, 15000),
   bargeIn: process.env.BARGE_IN !== "false",
-  bargeInMs: num(process.env.BARGE_IN_MS, 180),
-  bargeInGraceMs: num(process.env.BARGE_IN_GRACE_MS, 200),
-  fillerAfterMs: num(process.env.FILLER_AFTER_MS, 2200),
+  bargeInMs: num(process.env.BARGE_IN_MS, 300),
+  bargeInGraceMs: num(process.env.BARGE_IN_GRACE_MS, 500),
+  fillerAfterMs: num(process.env.FILLER_AFTER_MS, 1300),
   idleRepromptMs: num(process.env.IDLE_REPROMPT_MS, 9000),
   maxReprompts: num(process.env.MAX_REPROMPTS, 2),
-  echoCooldownMs: num(process.env.ECHO_COOLDOWN_MS, 200),
+  echoCooldownMs: num(process.env.ECHO_COOLDOWN_MS, 250),
   handoff: process.env.HUMAN_HANDOFF === "true",
 };
 
@@ -251,7 +251,7 @@ function handleCall(ws, deps, activeCalls) {
     if (isBotSpeaking()) {
       if (current?.noBargeIn) return;
       if (!CONF.bargeIn || Date.now() - current.startedAt < CONF.bargeInGraceMs) return;
-      const bargeThr = Math.max(650, speechThr * 1.15);
+      const bargeThr = Math.max(1500, speechThr * 1.6);
       bargeLoudMs = rms > bargeThr ? bargeLoudMs + chunkMs : Math.max(0, bargeLoudMs - chunkMs);
       if (bargeLoudMs >= CONF.bargeInMs) {
         stopPlayback("barge-in");
@@ -352,10 +352,10 @@ function handleCall(ws, deps, activeCalls) {
       await handoff("caller_request");
       return;
     }
-    const isFirstTurn = !session.messages || session.messages.filter((m) => m.role === "user").length === 0;
+    const userTurns = (session.messages || []).filter((m) => m.role === "user").length;
 
-    // Caller goodbye: only allowed AFTER turn 1 (never hang up on the opening greeting)
-    if (!isFirstTurn && USER_GOODBYE_RE.test(userText)) {
+    // Caller goodbye: only allowed after opening exchange (at least 1 prior user turn)
+    if (userTurns >= 1 && USER_GOODBYE_RE.test(userText)) {
       commitUser(turn, userText);
       commitAssistant(PHRASES.closing);
       await play(PHRASES.closing, { cacheable: true, noBargeIn: true });
@@ -403,8 +403,9 @@ function handleCall(ws, deps, activeCalls) {
     }
     if (!speech) speech = PHRASES.sorry;
 
-    // Never auto-close the call on turn 1
-    const isClosing = !isFirstTurn && Boolean(endCall || CALL_CLOSE_RE.test(speech));
+    // Auto-close call only when enquiry is done or site visit is booked:
+    const userSaidDone = /(?:बस|इतना\s*ही|धन्यवाद|शुक्रिया|थैंक\s*यू|नहीं\s*(?:चाहिए|कुछ|और)|बाय|अलविदा|ok\s*bye|bye)/i.test(userText);
+    const isClosing = userTurns >= 1 && Boolean(endCall || CALL_CLOSE_RE.test(speech)) && (session.appointmentBooked || userSaidDone);
 
     commitAssistant(speech);
     if (fillerPlayback) await fillerPlayback; // filler ko beech me mat kaato
