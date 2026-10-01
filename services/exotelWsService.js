@@ -60,7 +60,7 @@ const PHRASES = {
 const EMERGENCY_RE =
   /(?:सीने|छाती)\s*में\s*(?:बहुत\s*)?(?:तेज़?|भयंकर)\s*दर्द|हार्ट\s*अटैक|heart\s*attack|(?:सांस|साँस)\s*(?:नहीं\s*(?:आ|ले)|लेने\s*में\s*(?:बहुत\s*)?(?:दिक्कत|तकलीफ))|बेहोश|unconscious|एक्सीडेंट|accident|दुर्घटना|खून\s*(?:बह|निकल)|लकवा|स्ट्रोक|stroke|ज़हर|जहर\s*खा|दौरा\s*पड़|suicide|आत्महत्या/i;
 const HANDOFF_RE =
-  /(?:किसी\s*)?(?:इंसान|आदमी|व्यक्ति|रिसेप्शन|रिसेप्शनिस्ट|ऑपरेटर|मैनेजर|staff|human|operator|receptionist|real\s*person)\s*(?:से)?\s*(?:बात|जोड़|connect|transfer)/i;
+  /(?:किसी\s*)?(?:इंसान|आदमी|व्यक्ति|एजेंट|प्रॉपर्टी\s*मैनेजर|मैनेजर|ऑपरेटर|staff|human|operator|agent|manager|real\s*person)\s*(?:से)?\s*(?:बात|जोड़|connect|transfer)/i;
 const CALL_CLOSE_RE =
   /(?:आपका\s*दिन\s*शुभ\s*हो|दिन\s*शुभ\s*हो|apka\s*din\s*shubh\s*ho|shubh\s*din|have\s*a\s*(?:nice|great|good)\s*day)/i;
 const USER_GOODBYE_RE =
@@ -487,7 +487,7 @@ function handleCall(ws, deps, activeCalls, req) {
         { callSid },
         {
           $push: { transcript: { role: "assistant", text, timestamp: new Date() } },
-          ...(session.patientName ? { $set: { patientName: session.patientName, callerName: session.patientName } } : {}),
+          ...(session.patientName ? { $set: { patientName: session.patientName, clientName: session.patientName, callerName: session.patientName } } : {}),
         }
       )
     );
@@ -551,7 +551,7 @@ function handleCall(ws, deps, activeCalls, req) {
     db(
       CallLog.updateOne(
         { callSid },
-        { $set: { appointmentBooked: true, patientName: appt.patientName, callerName: appt.patientName } }
+        { $set: { appointmentBooked: true, patientName: appt.patientName, clientName: appt.patientName, callerName: appt.patientName } }
       )
     );
     return booking.confirmationSpeech(appt, { spokenName: session.patientNameSpoken });

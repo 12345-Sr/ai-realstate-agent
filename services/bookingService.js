@@ -224,8 +224,11 @@ async function validateAndBook({ request, patientName, phone, callSid, clock = g
   try {
     const appointment = await models.Appointment.create({
       patientName,
+      clientName: patientName,
       phone: phone || "Unknown",
       doctorName: doctor.name,
+      projectName: doctor.name,
+      propertyType: doctor.type || "Residential",
       department: doctor.type || "Residential",
       date,
       dateLabel: spokenDate(date),

@@ -10,12 +10,12 @@ function cleanPhone(p) {
   return String(p).replace(/\D/g, "").slice(-10);
 }
 
-function normalizeDoc(doc, phoneToPatientMap = {}) {
+function normalizeDoc(doc, phoneToClientMap = {}) {
   const appt = doc.appointment || {};
   const isBooked =
     doc.appointmentBooked === true ||
     doc.booked === true ||
-    (doc.status === "completed" && !!appt.patientName) ||
+    (doc.status === "completed" && !!(appt.patientName || appt.clientName)) ||
     /^(yes|true|1|booked)$/i.test(String(doc.booked || doc.appointment_booked || "").trim());
 
   let phone =
@@ -28,11 +28,13 @@ function normalizeDoc(doc, phoneToPatientMap = {}) {
 
   const phoneKey = cleanPhone(phone);
   let rawName =
+    appt.clientName ||
     appt.patientName ||
+    doc.clientName ||
     doc.patientName ||
     doc.callerName ||
-    phoneToPatientMap[phoneKey] ||
-    "New Patient";
+    phoneToClientMap[phoneKey] ||
+    "New Client";
 
   let name = toEnglishName(rawName);
 
@@ -91,12 +93,13 @@ router.get("/calls", async (req, res) => {
       return res.json(calls);
     }
 
-    const allAppts = await Appointment.find({}, { phone: 1, patientName: 1 }).sort({ createdAt: -1 }).limit(2000).lean();
-    const phoneToPatientMap = {};
+    const allAppts = await Appointment.find({}, { phone: 1, patientName: 1, clientName: 1 }).sort({ createdAt: -1 }).limit(2000).lean();
+    const phoneToClientMap = {};
     for (const a of allAppts) {
       const pKey = cleanPhone(a.phone);
-      if (pKey && a.patientName) {
-        phoneToPatientMap[pKey] = a.patientName;
+      const cName = a.clientName || a.patientName;
+      if (pKey && cName) {
+        phoneToClientMap[pKey] = cName;
       }
     }
 
@@ -119,7 +122,7 @@ router.get("/calls", async (req, res) => {
       },
     ]);
 
-    res.json(docs.map((d) => normalizeDoc(d, phoneToPatientMap)));
+    res.json(docs.map((d) => normalizeDoc(d, phoneToClientMap)));
   } catch (err) {
     console.error("[api] Error fetching calls:", err.message);
     res.status(500).json({ error: "Failed to fetch calls" });

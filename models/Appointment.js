@@ -3,8 +3,11 @@ const mongoose = require("mongoose");
 const appointmentSchema = new mongoose.Schema(
   {
     patientName: { type: String, required: true },
+    clientName: String,
     phone: { type: String, required: true },
     doctorName: { type: String, required: true },
+    projectName: String,
+    propertyType: String,
     department: String,
     // Pehle "Today (30 September 2026)" jaisa free text tha — query/sort nahi ho sakta tha.
     date: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ }, // YYYY-MM-DD (IST)
