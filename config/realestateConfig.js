@@ -18,8 +18,8 @@ module.exports = {
   assistantName: "मोनिका",
   assistantNameEn: "Monica",
 
-  // Master System Prompt (PDF Section 3 - Hindi equivalent of "Hi, I'm Monica, your property assistant. How are you today?"):
-  greeting: "नमस्ते! मैं मोनिका हूँ, आपकी प्रॉपर्टी असिस्टेंट। आज आप कैसे हैं?",
+  // Master System Prompt
+  greeting: "नमस्ते! मैं मोनिका हूँ, सिटी हाइट्स रियल्टी से आपकी प्रॉपर्टी असिस्टेंट। आज आप कैसे हैं?",
 
   // Site visit shifts (10:00 AM, 2:00 PM, 5:30 PM)
   shifts: [

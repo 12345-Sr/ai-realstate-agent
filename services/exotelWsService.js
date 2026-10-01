@@ -401,8 +401,12 @@ function handleCall(ws, deps, activeCalls, req) {
     // Caller goodbye: only allowed AFTER turn 1 (never hang up on the opening greeting)
     if (!isFirstTurn && USER_GOODBYE_RE.test(userText)) {
       commitUser(turn, userText);
-      commitAssistant(PHRASES.closing);
-      await play(PHRASES.closing, { cacheable: true });
+      const name = session.clientName || session.patientName;
+      const closing = name
+        ? `बात करने के लिए बहुत-बहुत धन्यवाद ${String(name).split(/\s+/)[0]} जी! आपका दिन शुभ हो।`
+        : PHRASES.closing;
+      commitAssistant(closing);
+      await play(closing, { cacheable: true });
       return;
     }
 
