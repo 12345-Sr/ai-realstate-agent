@@ -71,6 +71,22 @@ connectDB()
       preWarmTTS([PHRASES.greeting, ...PHRASES.fillers, ...PHRASES.reprompts, PHRASES.goodbye, PHRASES.handoff, PHRASES.closing], [8000]).catch(
         (err) => console.warn("[server] TTS pre-warm failed (non-fatal):", err.message)
       );
+
+      // Render free tier 15 min idle ke baad sleep me chala jaata hai -> incoming calls timeout.
+      // Har 10 min me self-ping karke server ko 24/7 active rakho.
+      const baseUrl = process.env.BASE_URL;
+      if (baseUrl && !baseUrl.includes("localhost")) {
+        const pingUrl = `${baseUrl.replace(/\/+$/, "")}/health`;
+        console.log(`[keep-alive] Arming 10-minute self-ping on ${pingUrl}`);
+        setInterval(async () => {
+          try {
+            const res = await fetch(pingUrl, { signal: AbortSignal.timeout(8000) });
+            console.log(`[keep-alive] Pinged ${pingUrl} (${res.status})`);
+          } catch (e) {
+            console.warn(`[keep-alive] Ping error: ${e.message}`);
+          }
+        }, 10 * 60 * 1000).unref();
+      }
     });
   })
   .catch((err) => {
