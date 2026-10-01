@@ -791,11 +791,12 @@ function handleCall(ws, deps, activeCalls, req) {
         break;
     }
   });
-  ws.on("close", () => {
+  ws.on("close", (code, reason) => {
     clearTimeout(safetyStartTimer);
-    finishCall("ws_close");
+    log(`⚠️ WebSocket closed: code=${code}, reason="${reason?.toString() || ""}"`);
+    finishCall(`ws_close_${code}`);
   });
-  ws.on("error", (err) => console.error("[ws]", err.message));
+  ws.on("error", (err) => console.error(`[call ${callSid ? callSid.slice(-6) : "------"}] ❌ WebSocket error:`, err.message));
 }
 
 module.exports = { setupExotelWebSocketServer, PHRASES, CONF };
