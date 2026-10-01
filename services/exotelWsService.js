@@ -124,10 +124,29 @@ function handleCall(ws, deps, activeCalls) {
   const log = (...a) => console.log(`[call ${callSid ? callSid.slice(-6) : "------"}]`, ...a);
 
   // ------------------------------------------------------------ outbound
+  let sentFrames = 0;
+  let inFrames = 0;
+
   const send = (obj) => {
-    if (ws.readyState === ws.OPEN && streamSid) ws.send(JSON.stringify({ ...obj, stream_sid: streamSid }));
+    if (ws.readyState === ws.OPEN) {
+      const payload = { ...obj };
+      const sid = streamSid || "default";
+      payload.stream_sid = sid;
+      payload.streamSid = sid;
+      try {
+        ws.send(JSON.stringify(payload));
+      } catch (err) {
+        console.error("[ws-send] error:", err.message);
+      }
+    }
   };
-  const sendMedia = (buf) => send({ event: "media", media: { payload: buf.toString("base64") } });
+  const sendMedia = (buf) => {
+    sentFrames++;
+    if (sentFrames === 1 || sentFrames % 40 === 0) {
+      log(`🔊 Outbound audio frame #${sentFrames} (${buf.length}B, sid=${streamSid})`);
+    }
+    send({ event: "media", media: { payload: buf.toString("base64") } });
+  };
   const sendClear = () => send({ event: "clear" });
   const sendMark = (name) => send({ event: "mark", mark: { name } });
 
@@ -358,9 +377,7 @@ function handleCall(ws, deps, activeCalls) {
     if (!isFirstTurn && USER_GOODBYE_RE.test(userText)) {
       commitUser(turn, userText);
       commitAssistant(PHRASES.closing);
-      await play(PHRASES.closing, { cacheable: true, noBargeIn: true });
-      await new Promise((r) => setTimeout(r, 800));
-      await hangupCall("caller_goodbye");
+      await play(PHRASES.closing, { cacheable: true });
       return;
     }
 
@@ -389,7 +406,7 @@ function handleCall(ws, deps, activeCalls) {
     if (turn.ac.signal.aborted || inflight !== turn || closed) return;
 
     commitUser(turn, userText);
-    const { speech: llmSpeech, draft, booking: bookReq, endCall } = ai.parseReply(raw);
+    const { speech: llmSpeech, draft, booking: bookReq } = ai.parseReply(raw);
     applyDraft(draft);
 
     let speech = llmSpeech;
@@ -403,19 +420,9 @@ function handleCall(ws, deps, activeCalls) {
     }
     if (!speech) speech = PHRASES.sorry;
 
-    // Never auto-close the call on turn 1
-    const isClosing = !isFirstTurn && Boolean(endCall || CALL_CLOSE_RE.test(speech));
-
     commitAssistant(speech);
     if (fillerPlayback) await fillerPlayback; // filler ko beech me mat kaato
     if (inflight !== turn || closed) return;
-
-    if (isClosing) {
-      await play(speech, { noBargeIn: true });
-      await new Promise((r) => setTimeout(r, 800));
-      await hangupCall("completed_with_closing_greeting");
-      return;
-    }
 
     await play(speech);
   }
@@ -513,31 +520,6 @@ function handleCall(ws, deps, activeCalls) {
     setTimeout(() => ws.close(1000, "handoff"), 300);
   }
 
-  async function hangupCall(reason = "completed") {
-    if (closed) return;
-    log(`🛑 Ending call: ${reason}`);
-    const { EXOTEL_SID: sid, EXOTEL_API_KEY: key, EXOTEL_API_TOKEN: token } = process.env;
-    if (sid && key && token && callSid && !callSid.startsWith("EXO_")) {
-      try {
-        await fetch(`https://api.exotel.com/v1/Accounts/${sid}/Calls/${callSid}.json`, {
-          method: "POST",
-          headers: {
-            Authorization: "Basic " + Buffer.from(`${key}:${token}`).toString("base64"),
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({ Status: "completed" }).toString(),
-          signal: AbortSignal.timeout(3000),
-        });
-      } catch (err) {
-        console.warn("[exotel] hangup API error:", err.message);
-      }
-    }
-    finishCall(reason);
-    try {
-      ws.close(1000, reason);
-    } catch { }
-  }
-
   // ------------------------------------------------------------ idle reprompt
   let idleTimer = null;
   function clearIdle() {
@@ -546,14 +528,14 @@ function handleCall(ws, deps, activeCalls) {
   }
   function armIdle() {
     clearIdle();
-    if (closed || handingOff || !streamSid) return;
+    if (closed || handingOff) return;
     idleTimer = setTimeout(async () => {
       if (isBotSpeaking() || capturing || (inflight && !inflight.committed) || pendingText) return armIdle();
       if (reprompts >= CONF.maxReprompts) {
-        log("💤 caller silent — ending");
-        handingOff = true;
-        await play(PHRASES.goodbye, { cacheable: true });
-        setTimeout(() => ws.close(1000, "silence"), 300);
+        log("💤 caller silent");
+        const line = PHRASES.goodbye;
+        session.messages.push({ role: "assistant", content: line });
+        await play(line, { cacheable: true });
         return;
       }
       const line = PHRASES.reprompts[reprompts++] || PHRASES.reprompts[0];
@@ -587,20 +569,64 @@ function handleCall(ws, deps, activeCalls) {
 
   function onStart(data) {
     const st = data.start || {};
-    streamSid = data.stream_sid || st.stream_sid;
-    callSid = st.call_sid || data.call_sid || `EXO_${Date.now()}`;
+    streamSid =
+      data.stream_sid ||
+      data.streamSid ||
+      data.StreamSid ||
+      st.stream_sid ||
+      st.streamSid ||
+      st.StreamSid ||
+      data.stream_id ||
+      st.stream_id ||
+      data.streamId ||
+      st.streamId ||
+      streamSid ||
+      "default";
+    callSid =
+      st.call_sid ||
+      st.callSid ||
+      st.CallSid ||
+      data.call_sid ||
+      data.callSid ||
+      data.CallSid ||
+      st.call_id ||
+      st.callId ||
+      data.call_id ||
+      data.callId ||
+      st.CallUUID ||
+      data.CallUUID ||
+      `EXO_${Date.now()}`;
     callStart = Date.now();
-    const rate = parseInt(st.media_format?.sample_rate || 8000, 10);
+    const rate = parseInt(
+      st.media_format?.sample_rate ||
+      st.mediaFormat?.sampleRate ||
+      st.media_format?.sampleRate ||
+      data.media_format?.sample_rate ||
+      data.mediaFormat?.sampleRate ||
+      st.sample_rate ||
+      st.sampleRate ||
+      8000,
+      10
+    );
     if ([8000, 16000, 24000].includes(rate)) setRate(rate);
     activeCalls.add(callSid);
 
     session = getSession(callSid);
-    const from = st.from || st.custom_parameters?.from || data.from;
+    const from =
+      st.from ||
+      st.From ||
+      st.caller ||
+      st.Caller ||
+      st.custom_parameters?.from ||
+      st.customParameters?.from ||
+      data.from ||
+      data.From;
     if (from) {
       session.callerPhone = from;
       session.region = detectRegion(from);
     }
-    log(`📞 start from=${from || "?"} rate=${sampleRate} frame=${FRAME_BYTES}B`);
+    const to = st.to || st.To || data.to || data.To;
+    log(`📞 start from=${from || "?"} to=${to || "?"} sid=${streamSid} callSid=${callSid} rate=${sampleRate} frame=${FRAME_BYTES}B`);
 
     if (!session.messages.length || session.messages[session.messages.length - 1].content !== PHRASES.greeting) {
       session.messages.push({ role: "assistant", content: PHRASES.greeting });
@@ -648,22 +674,47 @@ function handleCall(ws, deps, activeCalls) {
     } catch {
       return;
     }
+
+    const incomingStream =
+      data.stream_sid ||
+      data.streamSid ||
+      data.StreamSid ||
+      data.start?.stream_sid ||
+      data.start?.streamSid ||
+      data.start?.StreamSid ||
+      data.media?.stream_sid ||
+      data.media?.streamSid ||
+      data.stream_id ||
+      data.streamId;
+    if (incomingStream && (!streamSid || streamSid === "default")) {
+      streamSid = incomingStream;
+      log(`🎯 Captured streamSid=${streamSid} from event=${data.event}`);
+    }
+
+    if (data.event !== "media") {
+      log(`📥 Exotel event: "${data.event}" | payload: ${JSON.stringify(data).slice(0, 300)}`);
+    }
+
     switch (data.event) {
       case "connected":
+        if (data.stream_sid || data.streamSid) streamSid = data.stream_sid || data.streamSid;
+        log(`🔌 Exotel stream connected: ${streamSid || "ready"}`);
         break;
       case "start":
         onStart(data);
         break;
-      case "media":
-        if (session && data.media?.payload) onAudio(Buffer.from(data.media.payload, "base64"));
+      case "media": {
+        const payload = data.media?.payload || data.media?.Payload || data.payload;
+        if (session && payload) onAudio(Buffer.from(payload, "base64"));
         break;
+      }
       case "mark": {
-        const name = data.mark?.name;
+        const name = data.mark?.name || data.mark?.Name || data.name;
         if (current && name === `p${current.id}` && current.ttsDone && !current.pending.length) current.finish(true);
         break;
       }
       case "dtmf": {
-        const digit = data.dtmf?.digit;
+        const digit = data.dtmf?.digit || data.dtmf?.Digit || data.digit;
         log(`🔢 DTMF ${digit}`);
         if (digit === "0" && CONF.handoff && !handingOff) {
           stopPlayback("dtmf");
@@ -672,7 +723,7 @@ function handleCall(ws, deps, activeCalls) {
         break;
       }
       case "stop":
-        finishCall(data.stop?.reason || "stop");
+        finishCall(data.stop?.reason || data.reason || "stop");
         break;
     }
   });

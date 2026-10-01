@@ -220,7 +220,7 @@ test("booking tag without caller's 'yes' is NOT saved; bot reads back and asks",
   }
 });
 
-test("caller goodbye after turn 1 triggers closing + hangup (not on the opening greeting)", async () => {
+test("caller goodbye after turn 1 triggers closing speech (agent never hangs up, caller hangs up)", async () => {
   const h = harness({
     sttQueue: ["मुझे प्रॉपर्टी देखनी थी", "ठीक है बाय"],
     aiScript: () => ({ reply: "ज़रूर, बताइए।" }),
@@ -236,11 +236,12 @@ test("caller goodbye after turn 1 triggers closing + hangup (not on the opening 
     await waitFor(() => events.filter((e) => e.event === "mark").length >= 2, 6000);
     await sleep(300);
 
-    // Turn 2: caller says bye - should close deterministically, no LLM call for this turn
+    // Turn 2: caller says bye - should speak closing phrase, no LLM call for this turn
     await say(ws);
     assert.ok(await waitFor(() => h.spoken.some((s) => /धन्यवाद/.test(s))), "closing line spoken");
     assert.equal(h.aiCalls.length, 1, "goodbye handled deterministically, no second LLM call");
-    assert.ok(await waitFor(() => ws.readyState === WebSocket.CLOSED, 3000), "socket closed after goodbye");
+    // Call remains open — only caller cuts it
+    assert.equal(ws.readyState, WebSocket.OPEN, "call remains open for caller to hang up");
   } finally {
     try { ws.close(); } catch {}
     h.server.close();
