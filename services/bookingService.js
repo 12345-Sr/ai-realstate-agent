@@ -28,7 +28,10 @@ function normalizeDoctor(input) {
   const word = (a) => new RegExp(`(?<![\\u0900-\\u097Fa-z])${lc(a).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\u0900-\\u097Fa-z])`, "i");
   return (
     cfg.doctors.find((d) => d.aliases.some((a) => word(a).test(s))) ||
-    cfg.doctors.find((d) => word(d.specialty).test(s)) ||
+    cfg.doctors.find((d) => {
+      const category = d.specialty || d.type; // hospital uses specialty, real estate uses type
+      return category && word(category).test(s);
+    }) ||
     null
   );
 }
@@ -253,7 +256,7 @@ function confirmationSpeech(appt, { clock = getClock(), spokenName } = {}) {
   return (
     `${firstName} जी, आपकी ${projName} के लिए ` +
     `${relativeDayLabel(appt.date, clock.todayIso)} ${shift ? shift.spoken : appt.time} साइट विज़िट बुक हो गई है। ` +
-    `हमारा ऑफिस 123 एमजी रोड पर है, और हमारी टीम आपको लोकेशन भेज देगी। और कोई जानकारी चाहिए?`
+    `हमारा ऑफिस ${cfg.officeAddress} पर है, और हमारी टीम आपको लोकेशन भेज देगी। और कोई जानकारी चाहिए?`
   );
 }
 

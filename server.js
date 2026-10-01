@@ -51,11 +51,6 @@ app.get("/health", (req, res) => {
   });
 });
 
-app.all(["/media", "/stream"], (req, res, next) => {
-  if (req.headers.upgrade && req.headers.upgrade.toLowerCase() === "websocket") return next();
-  res.type("text/plain; charset=utf-8").send("Exotel Voicebot WebSocket stream endpoint. Connect using wss:// protocol.");
-});
-
 app.use("/exotel", exotelRoutes);
 app.use("/api", requireApiKey, dataRoutes);
 
@@ -71,22 +66,6 @@ connectDB()
       preWarmTTS([PHRASES.greeting, ...PHRASES.fillers, ...PHRASES.reprompts, PHRASES.goodbye, PHRASES.handoff, PHRASES.closing], [8000]).catch(
         (err) => console.warn("[server] TTS pre-warm failed (non-fatal):", err.message)
       );
-
-      // Render free tier 15 min idle ke baad sleep me chala jaata hai -> incoming calls timeout.
-      // Har 10 min me self-ping karke server ko 24/7 active rakho.
-      const baseUrl = process.env.BASE_URL;
-      if (baseUrl && !baseUrl.includes("localhost")) {
-        const pingUrl = `${baseUrl.replace(/\/+$/, "")}/health`;
-        console.log(`[keep-alive] Arming 10-minute self-ping on ${pingUrl}`);
-        setInterval(async () => {
-          try {
-            const res = await fetch(pingUrl, { signal: AbortSignal.timeout(8000) });
-            console.log(`[keep-alive] Pinged ${pingUrl} (${res.status})`);
-          } catch (e) {
-            console.warn(`[keep-alive] Ping error: ${e.message}`);
-          }
-        }, 10 * 60 * 1000).unref();
-      }
     });
   })
   .catch((err) => {
@@ -105,7 +84,7 @@ function shutdown(signal) {
   const tick = setInterval(async () => {
     if ((server.activeCalls?.size || 0) === 0 || Date.now() > deadline) {
       clearInterval(tick);
-      await mongoose.connection.close().catch(() => {});
+      await mongoose.connection.close().catch(() => { });
       process.exit(0);
     }
   }, 500);

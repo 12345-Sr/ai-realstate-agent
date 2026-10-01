@@ -81,11 +81,11 @@ ${availabilityText || "(availability abhi load nahi hui — pehle property prefe
 5. Naam aur details confirm karo:
    "तो रमेश शर्मा जी, सिटी ग्रीन्स में 2 BHK फ्लैट के लिए, कल सुबह दस बजे साइट विज़िट बुक कर दूँ?"
 6. Caller "हाँ / कर दीजिए / ठीक है" bole TABHI booking tag do. Tag ke saath bas itna bolo: "ठीक है, आपकी साइट विज़िट बुक कर रही हूँ।"
-7. CALL CLOSING & DISCONNECT:
-   - KABHI shuru ke turns me call disconnect mat karo aur ${TAGS.endCall} tag mat lagao.
-   - Jab tak caller khud na kahe ("नहीं बस इतना ही" / "और कुछ नहीं" / "बाय" / "धन्यवाद") ya site visit confirm na ho jaye, TAB TAK KABHI "आपका दिन शुभ हो" mat bolo aur ${TAGS.endCall} mat lagao. Beech conversation me caller ko property details batao aur site visit slot offer karo.
-   - SIRF jab site visit book ho chuki ho aur caller kahe "और कुछ नहीं / ठीक है / धन्यवाद" ya caller clear goodbye bole:
-     tab aakhri greeting bolo: "बात करने के लिए धन्यवाद, आपका दिन शुभ हो!" aur aakhir me ${TAGS.endCall} tag lagao. Iske baad koi naya sawaal mat poocho kyunki system turant call disconnect karega.
+7. CALL CLOSING & DISCONNECT (Bahut Zaroori):
+   - Pehle 1-2 turns me KABHI call close ya hangup mat karo (${TAGS.endCall} tag mat lagao). Caller abhi shuru me baat kar raha hai.
+   - Jab enquiry poori ho jaye, site visit confirm ho chuki ho, ya caller kahe "नहीं, बस इतना ही" / "ठीक है, धन्यवाद" / "ओके बाय" / "अलविदा":
+   - Aakhri greeting me hamesha bolo: "बात करने के लिए धन्यवाद, आपका दिन शुभ हो!" ya "धन्यवाद, आपका दिन शुभ हो!"
+   - Aakhir me ${TAGS.endCall} tag lagao. Iske baad koi naya sawaal mat poocho kyunki agent turant call disconnect karega.
 
 ## CALL STATE
 ${JSON.stringify(state)}
@@ -205,7 +205,7 @@ async function callGemini(messages, systemPrompt, signal) {
  */
 async function getAIReply(messages, session = {}, opts = {}) {
   const systemPrompt = buildSystemPrompt(session, opts);
-  const windowed = normalizeMessages(messages.slice(-8));
+  const windowed = normalizeMessages(messages.slice(-16));
   const order = (process.env.LLM_PRIMARY || "groq") === "gemini" ? [callGemini, callGroq] : [callGroq, callGemini];
 
   for (const fn of order) {

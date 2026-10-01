@@ -49,7 +49,7 @@ module.exports = {
       ],
       availableDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
       amenities: "क्लब हाउस, स्विमिंग पूल, जिम, 24 घंटे बिजली-पानी बैकअप, कवर्ड पार्किंग, बच्चों का पार्क",
-      aliases: ["city greens", "greens", "flat", "flats", "apartment", "apartments", "2bhk", "3bhk", "फ्लैट", "अपार्टमेंट", "सिटी ग्रीन्स"],
+      aliases: ["city greens", "greens", "flat", "flats", "apartment", "apartments", "2bhk", "3bhk", "2 bhk", "3 bhk", "फ्लैट", "अपार्टमेंट", "सिटी ग्रीन्स"],
     },
     {
       name: "Royal Palm Villas",

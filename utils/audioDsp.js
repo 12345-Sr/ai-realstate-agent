@@ -189,44 +189,84 @@ function normalizeSpeechGain(int16Array) {
 }
 
 /**
- * Full DSP pipeline: Bandpass Filter -> Gentle Normalization.
- * Note: Aggressive noise gating is avoided here because it crushes normal telephone speech.
+ * Full DSP pipeline: Bandpass Filter -> Adaptive Noise Gate -> Normalization.
  */
 function cleanAndIsolateVoice(pcmBuffer, sampleRate = 8000) {
   if (!pcmBuffer || pcmBuffer.length < 2) return pcmBuffer;
 
   const int16 = new Int16Array(pcmBuffer.buffer, pcmBuffer.byteOffset, Math.floor(pcmBuffer.length / 2));
-  
+
   // 1. Cut non-voice frequencies (below 300Hz, above 3400Hz)
   const bandpassed = applyTelephonyBandpass(int16, sampleRate);
 
-  // 2. Normalize voice level so Whisper gets clean, audible audio
-  const normalized = normalizeSpeechGain(bandpassed);
+  // 2. Suppress background noise in pauses
+  const gated = applyAdaptiveNoiseGate(bandpassed, sampleRate);
+
+  // 3. Normalize voice level
+  const normalized = normalizeSpeechGain(gated);
 
   return Buffer.from(normalized.buffer, normalized.byteOffset, normalized.byteLength);
 }
 
 /**
- * Verifies if the audio contains genuine caller speech vs pure dead line silence.
- * Returns { isGenuineSpeech, peakRms, voicedMs }
+ * Verifies if the audio contains genuine patient speech vs pure background noise.
+ * Returns { isGenuineSpeech, voicedMs, speechRatio, peakRms }
  */
 function analyzeVoiceActivity(pcmBuffer, sampleRate = 8000) {
   if (!pcmBuffer || pcmBuffer.length < 2) {
     return { isGenuineSpeech: false, voicedMs: 0, speechRatio: 0, peakRms: 0 };
   }
 
-  const rms = calculatePcmRms(pcmBuffer);
-  const durMs = Math.round((pcmBuffer.length / (sampleRate * 2)) * 1000);
+  const int16 = new Int16Array(pcmBuffer.buffer, pcmBuffer.byteOffset, Math.floor(pcmBuffer.length / 2));
+  const frameSize = Math.floor(sampleRate * 0.02); // 20ms
+  const numFrames = Math.floor(int16.length / frameSize);
 
-  // Ensure audio has audible energy (RMS > 80) and duration >= 180ms
-  const isGenuineSpeech = rms >= 70 && durMs >= 180;
+  if (numFrames < 3) {
+    return { isGenuineSpeech: false, voicedMs: 0, speechRatio: 0, peakRms: 0 };
+  }
+
+  const frameRms = new Float32Array(numFrames);
+  let maxRms = 0;
+  for (let f = 0; f < numFrames; f++) {
+    let sum = 0;
+    const start = f * frameSize;
+    for (let i = 0; i < frameSize; i++) {
+      const s = int16[start + i];
+      sum += s * s;
+    }
+    const rms = Math.sqrt(sum / frameSize);
+    frameRms[f] = rms;
+    if (rms > maxRms) maxRms = rms;
+  }
+
+  // Noise floor estimate (20th percentile)
+  const sorted = Array.from(frameRms).sort((a, b) => a - b);
+  const noiseFloor = sorted[Math.floor(sorted.length * 0.20)] || 100;
+  const voiceThreshold = Math.max(450, noiseFloor * 1.8);
+
+  let voicedFrames = 0;
+  for (let f = 0; f < numFrames; f++) {
+    if (frameRms[f] > voiceThreshold) {
+      voicedFrames++;
+    }
+  }
+
+  const voicedMs = voicedFrames * 20;
+  const speechRatio = voicedFrames / numFrames;
+
+  // Genuine human speech turn requirements:
+  // 1. Must contain at least 220ms (11 frames) of voiced audio
+  // 2. Voiced ratio must be at least 15% of the total recording
+  // 3. Peak RMS must be distinctly higher than the ambient noise floor
+  const isGenuineSpeech =
+    voicedMs >= 220 && speechRatio >= 0.14 && maxRms > noiseFloor * 1.6;
 
   return {
     isGenuineSpeech,
-    voicedMs: durMs,
-    speechRatio: 1.0,
-    peakRms: Math.round(rms),
-    noiseFloor: 50,
+    voicedMs,
+    speechRatio: Number(speechRatio.toFixed(2)),
+    peakRms: Math.round(maxRms),
+    noiseFloor: Math.round(noiseFloor),
   };
 }
 

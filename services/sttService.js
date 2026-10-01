@@ -50,23 +50,28 @@ function cleanTelephonyHindi(t) {
   s = s.replace(/(?:पीन|तीन|3)\s*(?:मजे|बजे|मजी|बजी)/gi, "3:00 बजे");
   s = s.replace(/(?:ढाई|दो\s*तीस|2:30)\s*(?:मजे|बजे|मजी|बजी)?/gi, "2:30 बजे");
 
-  // 3. Telephony phrasing corrections for real estate
-  s = s.replace(/अपारमेंट|अपारटमेंट|अपारटमेन्ट/gi, "अपार्टमेंट");
-  s = s.replace(/(?:साइड|साहिद|साइट)\s*(?:विजिट|बिजिट|विज़िट)/gi, "साइट विज़िट");
-  s = s.replace(/(?:प्रोपर्टी|प्रोपटी|प्रोपेर्टी)/gi, "प्रॉपर्टी");
-  s = s.replace(/(?:रेजिडेंस|रेजिडेन्सी)/gi, "रेजिडेंसी");
-  s = s.replace(/(?:फ्लाइट|फ्लेट)\b/gi, "फ्लैट");
-  s = s.replace(/(?:रजिस्टरी)/gi, "रजिस्ट्री");
-  s = s.replace(/(?:लोकेसन)/gi, "लोकेशन");
-  s = s.replace(/(?:कमर्सियल)/gi, "कमर्शियल");
+  // 3. Telephony phrasing corrections
+  s = s.replace(/होस्पिनल|हस्पताल|होस्पाइडल/gi, "हॉस्पिटल");
+  s = s.replace(/अपार्टमेंट|अपार्टमेन्ट|अपाइनल\s*डू|अपाइनल\s*बुक|उपाइडमेंट|उपाइनल/gi, "अपॉइंटमेंट");
   s = s.replace(/दिलचकता|दिलचक्ता|मिलचकता/gi, "मिल सकता");
-  s = s.replace(/मरग\s*यार\s*को|मरगवार|मरग\s*वार/gi, "मंगलवार");
-  s = s.replace(/बुदवार|बुध\s*वार/gi, "बुधवार");
+  s = s.replace(/(?:^|\s+)ते\s*अपॉइंटमेंट/gi, " का अपॉइंटमेंट");
+  s = s.replace(/(?:मरग\s*यार\s*को|मरगवार|मरग\s*वार)/gi, "मंगलवार");
+  s = s.replace(/(?:बुदवार|बुध\s*वार)/gi, "बुधवार");
+  s = s.replace(/(?:मारीफ|मरीज|मरीफ|मरीस|मरीज़)\s*का\s*नाम/gi, "मरीज़ का नाम");
   s = s.replace(/नेरा\s*नमाई|मेरा\s*नमाई|मेरा\s*नाँव/gi, "मेरा नाम");
   s = s.replace(/पिक्स\s*कराते|पिक्स\s*कर/gi, "फिक्स कराना");
   s = s.replace(/(?:नहीं\s*(?:है\s*)?तो\s*यही\s*नाम|यही\s*नाम\s*है|यही\s*नाम\s*तो\s*है)/gi, "हाँ यही नाम है");
 
-  // 4. Request to repeat / pardon
+  // 4. Common telephony illness and symptom phonetic mishearings
+  s = s.replace(/(?:^|\s+)(?:देख|देश|तेस|देस)\s*(?:बुकार|बुखार|बुखारह)/gi, " तेज बुखार");
+  s = s.replace(/(?:^|\s+)(?:देख|देश|तेस|देस)\s*(?:जुवा|जुकाम|जुखाम|जुवाम)/gi, " तेज जुकाम");
+  s = s.replace(/(?:^|\s+)(?:बुकार|बुखारह|बुकारु)(?:\s+|$)/gi, " बुखार ");
+  s = s.replace(/(?:^|\s+)(?:जुवा|जुखाम|जुवाम)(?:\s+|$)/gi, " जुकाम ");
+  s = s.replace(/(?:पेश\s*पेन|तेज\s*पेन)/gi, "तेज दर्द");
+  s = s.replace(/(?:^|\s+)(?:दरद|पेन)(?:\s+|$)/gi, " दर्द ");
+  s = s.replace(/(?:^|\s+)(?:खासी|घांसी)(?:\s+|$)/gi, " खांसी ");
+
+  // 5. Request to repeat / pardon
   s = s.replace(/(?:प्रदिखो|प्रतिखो|फिर\s*खो)\s*(?:बोलियेगा|बोलिए|बताइए)/gi, "फिर से बोलिए");
 
   return s;
@@ -127,7 +132,7 @@ async function transcribePcmAudio(pcmBuffer, sampleRate = 8000, { signal } = {})
       console.log(`[sttService] 🔇 Dropped foreign script hallucination: "${text}"`);
       return "";
     }
-    // Filter non-Indian/hallucinated noise words from line artifacts
+    // Filter non-Indian/hallucinated noise words
     if (/adi[oó]s|manejar|obrigad[oa]|por\s*favor|subtitles/i.test(text)) {
       console.log(`[sttService] 🔇 Dropped foreign hallucination: "${text}"`);
       return "";
@@ -135,10 +140,13 @@ async function transcribePcmAudio(pcmBuffer, sampleRate = 8000, { signal } = {})
 
     // Guard against Whisper repeating prompt hallucinations on background silence / noise
     if (
-      /मोनिका\s*हूँ.*प्रॉपर्टी\s*असिस्टेंट/i.test(text) ||
-      /आपकी\s*प्रॉपर्टी\s*असिस्टेंट.*आज\s*आप/i.test(text) ||
-      /सिटी\s*ग्रीन्स.*रॉयल\s*पाम/i.test(text) ||
-      /City\s*Heights\s*Realty/i.test(text)
+      /रोहित\s*वर्मा.*संजय\s*गुप्ता/i.test(text) ||
+      /अनन्या\s*शर्मा.*रोहित/i.test(text) ||
+      /मरीज\s*का\s*नाम\s*spelling/i.test(text) ||
+      /बुक्क\s*रोहित/i.test(text) ||
+      /नाम\s*की\s*स्पेलिंग\s*नाम\s*की/i.test(text) ||
+      /मरीज\s*की\s*समस्या|लक्षण\s*डॉक्टर/i.test(text) ||
+      text.includes("अपॉइंटमेंटमेंट")
     ) {
       console.log(`[sttService] 🔇 Dropped Whisper prompt hallucination: "${text}"`);
       return "";
@@ -148,7 +156,7 @@ async function transcribePcmAudio(pcmBuffer, sampleRate = 8000, { signal } = {})
     text = cleanTelephonyHindi(text);
 
     // Filter out common Whisper hallucination artifacts from background noise
-    const noiseWords = ["झाल", "you", "bye", ".", "...", "thank you", "subtitles", "adios", "adiós"];
+    const noiseWords = ["झाल", "you", "bye", ".", "...", "thank you", "subtitles"];
     // Whisper ke famous silence-hallucinations (YouTube subtitles se seekhe hue)
     if (/सब्सक्राइब|subscribe|like\s*and\s*share|अमारा\.org|amara\.org/i.test(text)) return "";
     if (noiseWords.includes(text.toLowerCase()) || text.length < 2) {

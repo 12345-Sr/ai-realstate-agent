@@ -52,17 +52,43 @@ const ASKED_NAME_RE =
   /(?:आपका\s*नाम|अपना\s*नाम|नाम\s*बताएं|नाम\s*बताओ|नाम\s*बताइए|नाम\s*क्या\s*है|your\s*name|full\s*name)/i;
 const EXPLICIT_NAME_RE = /(?:मेरा\s*नाम|मरीज़?\s*का\s*नाम|नाम\s*है|my\s*name\s*is)/i;
 
-const DOCTOR_NAME_PATTERNS = [
-  /sanjay\s*gupta/i,
-  /rohit\s*verma/i,
-  /ananya\s*sharma/i,
-  /priya\s*nair/i,
-  /संजय\s*गुप्ता/i,
-  /रोहित\s*वर्मा/i,
-  /अनन्या\s*शर्मा/i,
-  /प्रिया\s*नायर/i,
-  /हॉस्पिटल|क्लिनिक/i
-];
+/*
+ * BUG FOUND DURING REAL-ESTATE PORT: this list was still hardcoded to the 4
+ * HOSPITAL doctor names (Sanjay Gupta, Rohit Verma, Ananya Sharma, Priya
+ * Nair) and the words "हॉस्पिटल|क्लिनिक". It is a safety net that rejects the
+ * AI accidentally writing a DOCTOR's (or here, a PROJECT's) name into the
+ * patientName field instead of the caller's actual name - a real failure
+ * mode seen in testing. With the hardcoded hospital list, this guard did
+ * NOTHING for real estate: nothing stopped the AI from writing "City Greens
+ * Residency" into patientName and having it locked in as the client's name.
+ *
+ * FIX: build the pattern list from config at load time instead of hardcoding
+ * it, so it is always in sync with whatever doctors/projects are configured,
+ * for either vertical, with no manual step to remember.
+ */
+const cfg = require("../config/realestateConfig");
+
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildEntityNamePatterns(doctors) {
+  const patterns = [];
+  for (const d of doctors || []) {
+    if (d.name) patterns.push(new RegExp(escapeRegExp(d.name), "i"));
+    if (d.hindiName) patterns.push(new RegExp(escapeRegExp(d.hindiName), "i"));
+    for (const alias of d.aliases || []) {
+      if (alias && alias.length > 3) {
+        patterns.push(new RegExp(`${B}${escapeRegExp(alias)}${E}`, "i"));
+      }
+    }
+  }
+  // Generic domain words that are never a person's own name, regardless of vertical
+  patterns.push(/हॉस्पिटल|क्लिनिक|प्रॉपर्टी|रियल्टी|एजेंसी|hospital|clinic|realty|property/i);
+  return patterns;
+}
+
+const DOCTOR_NAME_PATTERNS = buildEntityNamePatterns(cfg.doctors);
 
 function isInvalidPatientName(name) {
   if (!name) return true;

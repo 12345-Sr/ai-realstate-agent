@@ -39,13 +39,6 @@ router.all("/greeting", async (req, res) => {
 });
 
 /**
- * Handle HTTP probes (GET, POST, HEAD) to /exotel/media or /exotel/stream so Exotel pre-flight checks succeed
- */
-router.all(["/media", "/stream"], (req, res) => {
-  res.type("text/plain; charset=utf-8").send("Exotel Voicebot WebSocket stream endpoint. Connect using wss:// protocol.");
-});
-
-/**
  * Passthru applet (DTMF menus). Kept for backward compatibility.
  */
 router.all(["/inbound", "/passthru"], async (req, res) => {
