@@ -105,53 +105,33 @@ router.all(["/inbound", "/passthru"], async (req, res) => {
 });
 
 /**
- * Outbound call trigger.
- *
- * SECURITY FIX: pehle bina auth ke khula tha — internet pe koi bhi
- * POST /exotel/outbound {"to": "<koi bhi number>"} karke AAPKE Exotel account se
- * calls lagwa sakta tha (toll fraud / bill). Ab DASHBOARD_API_KEY zaroori.
+ * Inbound-only verification endpoint: GET/POST /exotel/check
  */
-router.post("/outbound", requireApiKey, async (req, res) => {
-  const { to, appId } = req.body || {};
-  const digits = String(to || "").replace(/[^\d+]/g, "");
-  if (!/^\+?\d{10,13}$/.test(digits)) {
-    return res.status(400).json({ error: "Valid 'to' phone number required" });
-  }
-
-  const { EXOTEL_SID: sid, EXOTEL_API_KEY: key, EXOTEL_API_TOKEN: token } = process.env;
-  const flowId = appId || process.env.EXOTEL_APP_ID;
-  if (!sid || !key || !token || !flowId) {
-    return res.status(500).json({ error: "Exotel credentials / EXOTEL_APP_ID not configured" });
-  }
-  const callerId = String(process.env.EXOTEL_PHONE_NUMBER || "").replace(/\D/g, "");
-
-  const form = new URLSearchParams({
-    From: digits,
-    CallerId: callerId,
-    Url: `https://my.exotel.com/${sid}/exoml/start_voice/${flowId}`,
+router.all("/check", (req, res) => {
+  const domain = (process.env.BASE_URL || "ai-realstate-agent.onrender.com").replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const wsUrl = `wss://${domain}/exotel/media`;
+  res.json({
+    service: "AI Real Estate Calling Agent (City Heights Realty)",
+    mode: "inbound_only",
+    inboundPhone: process.env.EXOTEL_PHONE_NUMBER || "08047289335",
+    exotelSid: process.env.EXOTEL_SID || "webtech8",
+    flowId: process.env.EXOTEL_APP_ID || "1351362",
+    wsEndpoint: wsUrl,
+    dynamicUrl: `https://${domain}/exotel/media`,
+    status: "ready_for_inbound_calls",
+    outboundDisabled: true,
   });
+});
 
-  try {
-    const response = await fetch(`https://api.exotel.com/v1/Accounts/${sid}/Calls/connect.json`, {
-      method: "POST",
-      headers: {
-        Authorization: "Basic " + Buffer.from(`${key}:${token}`).toString("base64"),
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: form.toString(),
-      signal: AbortSignal.timeout(10000),
-    });
-    const text = await response.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { raw: text.slice(0, 500) };
-    }
-    return res.status(response.ok ? 200 : 502).json({ success: response.ok, exotelResponse: data });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
+/**
+ * Outbound calls are disabled - system is inbound only.
+ */
+router.all("/outbound", (req, res) => {
+  return res.status(403).json({
+    error: "Outbound calling is disabled. This service only accepts inbound phone calls.",
+    mode: "inbound_only",
+    inboundNumber: process.env.EXOTEL_PHONE_NUMBER || "08047289335",
+  });
 });
 
 module.exports = router;
