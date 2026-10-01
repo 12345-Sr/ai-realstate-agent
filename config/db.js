@@ -8,7 +8,7 @@ async function connectDB() {
   await mongoose.connect(uri, {
     serverSelectionTimeoutMS: 8000,
     // URI me database naam na ho to "test" DB me data jaata tha
-    dbName: process.env.MONGODB_DB || undefined,
+    dbName: process.env.MONGODB_DB || "ai_receptionist",
     maxPoolSize: 20,
   });
   console.log(`[db] Connected to MongoDB (${mongoose.connection.name})`);

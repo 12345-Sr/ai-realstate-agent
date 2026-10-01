@@ -85,10 +85,20 @@ function setupExotelWebSocketServer(httpServer, overrides = {}) {
     let pathname = "";
     try {
       pathname = new URL(request.url, "http://x").pathname;
-    } catch {}
-    if (["/exotel/media", "/media", "/stream"].includes(pathname)) {
+    } catch {
+      pathname = request.url || "";
+    }
+    const cleanPath = pathname.replace(/\/+$/, "") || "/";
+    console.log(`[ws-upgrade] Incoming upgrade for: "${pathname}" (clean: "${cleanPath}")`);
+    if (
+      ["/exotel/media", "/media", "/stream", "/"].includes(cleanPath) ||
+      cleanPath.startsWith("/exotel") ||
+      cleanPath.startsWith("/media") ||
+      cleanPath.startsWith("/stream")
+    ) {
       wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request));
     } else {
+      console.warn(`[ws-upgrade] Rejected unknown path: "${pathname}"`);
       socket.destroy();
     }
   });
@@ -651,6 +661,8 @@ function handleCall(ws, deps, activeCalls) {
     }
     switch (data.event) {
       case "connected":
+        if (data.stream_sid) streamSid = data.stream_sid;
+        log(`🔌 Exotel stream connected: ${streamSid || "ready"}`);
         break;
       case "start":
         onStart(data);

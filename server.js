@@ -51,6 +51,11 @@ app.get("/health", (req, res) => {
   });
 });
 
+app.all(["/media", "/stream"], (req, res, next) => {
+  if (req.headers.upgrade && req.headers.upgrade.toLowerCase() === "websocket") return next();
+  res.type("text/plain; charset=utf-8").send("Exotel Voicebot WebSocket stream endpoint. Connect using wss:// protocol.");
+});
+
 app.use("/exotel", exotelRoutes);
 app.use("/api", requireApiKey, dataRoutes);
 
