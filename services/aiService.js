@@ -81,11 +81,10 @@ ${availabilityText || "(availability abhi load nahi hui — pehle property prefe
 5. Naam aur details confirm karo:
    "तो रमेश शर्मा जी, सिटी ग्रीन्स में 2 BHK फ्लैट के लिए, कल सुबह दस बजे साइट विज़िट बुक कर दूँ?"
 6. Caller "हाँ / कर दीजिए / ठीक है" bole TABHI booking tag do. Tag ke saath bas itna bolo: "ठीक है, आपकी साइट विज़िट बुक कर रही हूँ।"
-7. CALL CLOSING & DISCONNECT (Bahut Zaroori):
-   - Pehle 1-2 turns me KABHI call close ya hangup mat karo (${TAGS.endCall} tag mat lagao). Caller abhi shuru me baat kar raha hai.
+7. CALL CLOSING (Agent KABHI call disconnect nahi karega — sirf caller hi call cut karega):
    - Jab enquiry poori ho jaye, site visit confirm ho chuki ho, ya caller kahe "नहीं, बस इतना ही" / "ठीक है, धन्यवाद" / "ओके बाय" / "अलविदा":
-   - Aakhri greeting me hamesha bolo: "बात करने के लिए धन्यवाद, आपका दिन शुभ हो!" ya "धन्यवाद, आपका दिन शुभ हो!"
-   - Aakhir me ${TAGS.endCall} tag lagao. Iske baad koi naya sawaal mat poocho kyunki agent turant call disconnect karega.
+   - Hamesha vinamrata se warm reply do: "बात करने के लिए धन्यवाद, आपका दिन शुभ हो!"
+   - Call disconnect mat karo; caller ke phone cut karne ka intezar karo.
 
 ## CALL STATE
 ${JSON.stringify(state)}
@@ -93,9 +92,9 @@ ${state.booked ? "Site visit book ho chuki hai. Dobara booking tag mat dena jab 
 
 ## OUTPUT FORMAT (strict)
 Pehle sirf bola jaane wala text. Uske BAAD, har jawab ke aakhir me ek line:
-${TAGS.draftStart}{"patientName":"<naam>","nameConfirmed":<true sirf jab caller ne naam haan bola>,"doctorName":"<Project Name jaise City Greens Residency>","date":"<YYYY-MM-DD>","time":"<10:00 AM | 2:00 PM | 5:30 PM>","reason":"<2 BHK Flat / Villa / Plot>"}${TAGS.draftEnd}
+${TAGS.draftStart}{"clientName":"<naam>","nameConfirmed":<true sirf jab caller ne naam haan bola>,"projectName":"<Project Name jaise City Greens Residency>","date":"<YYYY-MM-DD>","time":"<10:00 AM | 2:00 PM | 5:30 PM>","reason":"<2 BHK Flat / Villa / Plot>"}${TAGS.draftEnd}
 Sirf step 6 par, draft ke baad ek aur line:
-${TAGS.bookStart}{"patientName":"...","doctorName":"...","date":"YYYY-MM-DD","time":"...","reason":"..."}${TAGS.bookEnd}
+${TAGS.bookStart}{"clientName":"...","projectName":"...","date":"YYYY-MM-DD","time":"...","reason":"..."}${TAGS.bookEnd}
 Placeholder ya anumaan se value mat bharo; jo pata nahi woh khaali chhodo.`;
 }
 
@@ -240,6 +239,19 @@ function parseReply(raw) {
   };
   const draft = grab(TAGS.draftStart, TAGS.draftEnd);
   const booking = grab(TAGS.bookStart, TAGS.bookEnd);
+
+  if (draft) {
+    if (!draft.clientName && draft.patientName) draft.clientName = draft.patientName;
+    if (!draft.patientName && draft.clientName) draft.patientName = draft.clientName;
+    if (!draft.projectName && draft.doctorName) draft.projectName = draft.doctorName;
+    if (!draft.doctorName && draft.projectName) draft.doctorName = draft.projectName;
+  }
+  if (booking) {
+    if (!booking.clientName && booking.patientName) booking.clientName = booking.patientName;
+    if (!booking.patientName && booking.clientName) booking.patientName = booking.clientName;
+    if (!booking.projectName && booking.doctorName) booking.projectName = booking.doctorName;
+    if (!booking.doctorName && booking.projectName) booking.doctorName = booking.projectName;
+  }
 
   // Speech = everything before the first tag/JSON-ish marker
   let speech = text.split(/<<|```|\{\s*"/)[0];

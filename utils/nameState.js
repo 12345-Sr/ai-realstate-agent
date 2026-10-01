@@ -50,21 +50,11 @@ const ASKED_CONFIRM_RE =
 const ASKED_SPELL_RE = /(?:स्पेलिंग|spell)/i;
 const ASKED_NAME_RE =
   /(?:आपका\s*नाम|अपना\s*नाम|नाम\s*बताएं|नाम\s*बताओ|नाम\s*बताइए|नाम\s*क्या\s*है|your\s*name|full\s*name)/i;
-const EXPLICIT_NAME_RE = /(?:मेरा\s*नाम|मरीज़?\s*का\s*नाम|नाम\s*है|my\s*name\s*is)/i;
+const EXPLICIT_NAME_RE = /(?:मेरा\s*नाम|क्लाइंट\s*का\s*नाम|ग्राहक\s*का\s*नाम|मरीज़?\s*का\s*नाम|नाम\s*है|my\s*name\s*is)/i;
 
 /*
- * BUG FOUND DURING REAL-ESTATE PORT: this list was still hardcoded to the 4
- * HOSPITAL doctor names (Sanjay Gupta, Rohit Verma, Ananya Sharma, Priya
- * Nair) and the words "हॉस्पिटल|क्लिनिक". It is a safety net that rejects the
- * AI accidentally writing a DOCTOR's (or here, a PROJECT's) name into the
- * patientName field instead of the caller's actual name - a real failure
- * mode seen in testing. With the hardcoded hospital list, this guard did
- * NOTHING for real estate: nothing stopped the AI from writing "City Greens
- * Residency" into patientName and having it locked in as the client's name.
- *
- * FIX: build the pattern list from config at load time instead of hardcoding
- * it, so it is always in sync with whatever doctors/projects are configured,
- * for either vertical, with no manual step to remember.
+ * Safety net: Rejects the AI accidentally writing a PROJECT's name into the
+ * client/patient name field instead of the caller's actual name.
  */
 const cfg = require("../config/realestateConfig");
 
@@ -83,8 +73,8 @@ function buildEntityNamePatterns(doctors) {
       }
     }
   }
-  // Generic domain words that are never a person's own name, regardless of vertical
-  patterns.push(/हॉस्पिटल|क्लिनिक|प्रॉपर्टी|रियल्टी|एजेंसी|hospital|clinic|realty|property/i);
+  // Generic domain words that are never a person's own name
+  patterns.push(/प्रॉपर्टी|रियल्टी|एजेंसी|फ्लैट|विला|प्लॉट|कमर्शियल|realty|property/i);
   return patterns;
 }
 
@@ -99,6 +89,8 @@ function isInvalidPatientName(name) {
     clean === "null" ||
     clean === "Unknown" ||
     clean === "Patient" ||
+    clean === "Client" ||
+    clean === "Customer" ||
     /^spelling/i.test(clean) ||
     /^स्पेलिंग/i.test(clean)
   ) {
@@ -206,4 +198,11 @@ function finalizeBookingName(session, booking) {
   return booking;
 }
 
-module.exports = { applyCallerTurn, applyAiDraft, finalizeBookingName, isInvalidPatientName, classifyConfirmation };
+module.exports = {
+  applyCallerTurn,
+  applyAiDraft,
+  finalizeBookingName,
+  isInvalidPatientName,
+  isInvalidClientName: isInvalidPatientName,
+  classifyConfirmation,
+};

@@ -177,12 +177,13 @@ async function releaseSlot(doctorName, date, time) {
  * @returns {Promise<{ok:boolean, appointment?:object, speech?:string, reason?:string}>}
  *   ok=false => `speech` is what the bot should say instead of the LLM's confirmation.
  */
-async function validateAndBook({ request, patientName, phone, callSid, clock = getClock() }) {
-  const doctor = normalizeDoctor(request.doctorName);
+async function validateAndBook({ request = {}, patientName, clientName, phone, callSid, clock = getClock() }) {
+  const doctor = normalizeDoctor(request.projectName || request.doctorName);
+  const callerName = clientName || patientName;
   if (!doctor) {
     return { ok: false, reason: "no_doctor", speech: "बस यह बता दीजिए कि आप 2 BHK, 3 BHK, विला या किस तरह की प्रॉपर्टी देखना चाहते हैं?" };
   }
-  if (!patientName) {
+  if (!callerName) {
     return { ok: false, reason: "no_name", speech: "साइट विज़िट दर्ज करने के लिए आपका शुभ नाम बता दीजिए।" };
   }
   const shift = normalizeShift(request.time);
@@ -223,8 +224,8 @@ async function validateAndBook({ request, patientName, phone, callSid, clock = g
 
   try {
     const appointment = await models.Appointment.create({
-      patientName,
-      clientName: patientName,
+      patientName: callerName,
+      clientName: callerName,
       phone: phone || "Unknown",
       doctorName: doctor.name,
       projectName: doctor.name,
@@ -252,10 +253,10 @@ async function validateAndBook({ request, patientName, phone, callSid, clock = g
 
 /** Spoken confirmation built from the SAVED record for real estate. */
 function confirmationSpeech(appt, { clock = getClock(), spokenName } = {}) {
-  const doctor = normalizeDoctor(appt.doctorName);
+  const doctor = normalizeDoctor(appt.projectName || appt.doctorName);
   const shift = normalizeShift(appt.time);
-  const firstName = String(spokenName || appt.patientName).split(/\s+/)[0];
-  const projName = doctor ? doctor.hindiName : (appt.doctorName || "प्रॉपर्टी");
+  const firstName = String(spokenName || appt.clientName || appt.patientName).split(/\s+/)[0];
+  const projName = doctor ? doctor.hindiName : (appt.projectName || appt.doctorName || "प्रॉपर्टी");
   return (
     `${firstName} जी, आपकी ${projName} के लिए ` +
     `${relativeDayLabel(appt.date, clock.todayIso)} ${shift ? shift.spoken : appt.time} साइट विज़िट बुक हो गई है। ` +
@@ -266,6 +267,7 @@ function confirmationSpeech(appt, { clock = getClock(), spokenName } = {}) {
 module.exports = {
   models,
   normalizeDoctor,
+  normalizeProject: normalizeDoctor,
   normalizeShift,
   resolveDate,
   slotProblem,
@@ -275,5 +277,6 @@ module.exports = {
   describeAvailability,
   offerSentence,
   validateAndBook,
+  bookSiteVisit: validateAndBook,
   confirmationSpeech,
 };

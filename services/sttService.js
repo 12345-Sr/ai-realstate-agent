@@ -129,12 +129,10 @@ async function transcribePcmAudio(pcmBuffer, sampleRate = 8000, { signal } = {})
 
     // Guard against Whisper repeating prompt hallucinations on background silence / noise
     if (
-      /रोहित\s*वर्मा.*संजय\s*गुप्ता/i.test(text) ||
-      /अनन्या\s*शर्मा.*रोहित/i.test(text) ||
-      /मरीज\s*का\s*नाम\s*spelling/i.test(text) ||
-      /बुक्क\s*रोहित/i.test(text) ||
+      /मोनिका.*प्रॉपर्टी असिस्टेंट/i.test(text) ||
+      /सिटी\s*ग्रीन्स.*रॉयल\s*पाम/i.test(text) ||
+      /ग्राहक\s*का\s*नाम\s*spelling/i.test(text) ||
       /नाम\s*की\s*स्पेलिंग\s*नाम\s*की/i.test(text) ||
-      /मरीज\s*की\s*समस्या|लक्षण\s*डॉक्टर/i.test(text) ||
       text.includes("अपॉइंटमेंटमेंट")
     ) {
       console.log(`[sttService] 🔇 Dropped Whisper prompt hallucination: "${text}"`);

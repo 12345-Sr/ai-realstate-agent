@@ -88,12 +88,12 @@ function isOpdDay(iso) {
 
 /** Compact, token-efficient knowledge block for the LLM prompt. */
 function buildKnowledgeText() {
-  const projs = (cfg.projects || cfg.doctors || [])
+  const projs = (cfg.projects || [])
     .map(
       (p, i) =>
-        `${i + 1}. ${p.name} (${p.hindiName}) — ${p.type || p.specialty} / ${p.typeHindi || p.specialtyHindi}, ${p.location || p.room}. ` +
+        `${i + 1}. ${p.name} (${p.hindiName}) — ${p.type} / ${p.typeHindi}, ${p.location}. ` +
         `कीमत: ${p.startingPrice || "₹45 लाख"} से शुरू. ` +
-        `सुविधाएँ: ${p.amenities || p.symptoms}.`
+        `सुविधाएँ: ${p.amenities}.`
     )
     .join("\n");
   const shifts = cfg.shifts.map((s) => `${s.time} (${s.spoken})`).join(", ");

@@ -244,9 +244,9 @@ function extractPatientNameFromSpeech(text) {
   // 2. Strip trailing conversational speech markers
   clean = clean.replace(/\s+(?:बोल\s*रहा\s*हूँ|बात\s*कर\s*रहा\s*हूँ|बोल\s*रही\s*हूँ|है|हूँ|हूं)$/i, "").trim();
 
-  // Pattern 1: मेरा नाम / मरीज का नाम / पेशेंट का नाम / नाम है X Y
+  // Pattern 1: मेरा नाम / क्लाइंट का नाम / ग्राहक का नाम / नाम है X Y
   const m1 = clean.match(
-    /(?:मेरा\s*नाम|मरीज़\s*का\s*नाम|मरीज\s*का\s*नाम|पेशेंट\s*का\s*नाम|नाम\s*है)\s+(?:है\s+)?([^\s]+(?:\s+[^\s]+)*)/i
+    /(?:मेरा\s*नाम|क्लाइंट\s*का\s*नाम|ग्राहक\s*का\s*नाम|मरीज़\s*का\s*नाम|मरीज\s*का\s*नाम|पेशेंट\s*का\s*नाम|नाम\s*है)\s+(?:है\s+)?([^\s]+(?:\s+[^\s]+)*)/i
   );
   if (m1) {
     const after = m1[1].split(/\s+/);
@@ -259,8 +259,8 @@ function extractPatientNameFromSpeech(text) {
     if (nameWords.length >= 1) return toEnglishName(nameWords.join(" "));
   }
 
-  // Pattern 2: Clause before symptom or doctor mention (e.g. "हृदयेश त्रिपाठी मुझे बुखार है")
-  const splitIdx = clean.search(/(?:मुझे|डॉक्टर|दिखाना|अपॉइंटमेंट|फीस|समय|कब|दर्द|बुखार|खांसी|तकलीफ)/i);
+  // Pattern 2: Clause before property interest or site visit mention (e.g. "हृदयेश त्रिपाठी मुझे विला देखना है")
+  const splitIdx = clean.search(/(?:मुझे|प्रॉपर्टी|फ्लैट|विला|प्लॉट|साइट|विज़िट|देखना|दिखाना|बजट|रेट|कीमत|समय|कब)/i);
   if (splitIdx > 0) {
     clean = clean.slice(0, splitIdx).trim();
   }
@@ -280,14 +280,14 @@ function extractPatientNameFromSpeech(text) {
 }
 
 /**
- * Extracts patient name when the AI assistant greets the patient with "[Name] जी"
+ * Extracts client name when the AI assistant greets the client with "[Name] जी"
  */
 function extractNameFromAssistantSpeech(speech) {
   if (!speech) return null;
   const nonNameWords = new Set([
     "जी", "हाँ", "हां", "नमस्ते", "धन्यवाद", "शुक्रिया", "अच्छा", "ठीक", "बिल्कुल",
     "माफ़", "माफ", "कीजिए", "कीजिये", "मत", "चिंता", "परेशान", "होइए", "कोई", "बात", "नहीं",
-    "कृपया", "बताइए", "सुनिए", "बोलिए", "अरे", "हेलो", "हलो", "डॉक्टर", "समय", "अपॉइंटमेंट"
+    "कृपया", "बताइए", "सुनिए", "बोलिए", "अरे", "हेलो", "हलो", "प्रॉपर्टी", "समय", "साइट", "विज़िट"
   ]);
   const m = speech.match(/(?:^|[।?!]\s*)([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\s+जी/i);
   if (m) {
@@ -307,9 +307,13 @@ function extractNameFromAssistantSpeech(speech) {
   return null;
 }
 
+// Client name aliases
+const extractClientNameFromSpeech = extractPatientNameFromSpeech;
+
 module.exports = {
   toEnglishName,
   parseSpelledName,
   extractPatientNameFromSpeech,
+  extractClientNameFromSpeech,
   extractNameFromAssistantSpeech,
 };

@@ -474,11 +474,16 @@ function handleCall(ws, deps, activeCalls, req) {
 
   function applyDraft(draft) {
     if (!draft) return;
+    const clientNameInput = draft.clientName || draft.patientName;
+    if (clientNameInput && !draft.patientName) draft.patientName = clientNameInput;
+    const projectNameInput = draft.projectName || draft.doctorName;
+    if (projectNameInput && !draft.doctorName) draft.doctorName = projectNameInput;
+
     applyAiDraft(session, draft, toEnglishName);
-    if (!session.nameConfirmed && /[ऀ-ॿ]/.test(draft.patientName || "") && !isInvalidPatientName(draft.patientName)) {
-      session.patientNameSpoken = draft.patientName.trim();
+    if (!session.nameConfirmed && /[ऀ-ॿ]/.test(clientNameInput || "") && !isInvalidPatientName(clientNameInput)) {
+      session.patientNameSpoken = clientNameInput.trim();
     }
-    const doc = booking.normalizeDoctor(draft.doctorName);
+    const doc = booking.normalizeDoctor(projectNameInput);
     if (doc) session.doctorName = doc.name;
     const shift = booking.normalizeShift(draft.time);
     if (shift) session.selectedTime = shift.time;
@@ -488,10 +493,12 @@ function handleCall(ws, deps, activeCalls, req) {
   }
 
   async function handleBooking(req, llmSpeech, userText) {
+    const rawReqName = req.clientName || req.patientName;
     let name = session.patientName && !isInvalidPatientName(session.patientName) ? session.patientName : null;
-    if (!name && req.patientName && !isInvalidPatientName(req.patientName)) name = toEnglishName(req.patientName);
+    if (!name && rawReqName && !isInvalidPatientName(rawReqName)) name = toEnglishName(rawReqName);
     const request = {
-      doctorName: req.doctorName || session.doctorName,
+      doctorName: req.projectName || req.doctorName || session.doctorName,
+      projectName: req.projectName || req.doctorName || session.doctorName,
       date: req.date || session.date,
       time: req.time || session.selectedTime,
       reason: req.reason || session.reason,
@@ -500,7 +507,7 @@ function handleCall(ws, deps, activeCalls, req) {
     // Guard: LLM kabhi-kabhi caller ki "haan" ke bina hi booking tag de deta hai.
     // Caller ne abhi haan nahi bola => khud read-back karke poocho.
     if (classifyConfirmation(userText) !== "yes") {
-      const doc = booking.normalizeDoctor(request.doctorName);
+      const doc = booking.normalizeDoctor(request.projectName || request.doctorName);
       const shift = booking.normalizeShift(request.time);
       const date = booking.resolveDate(request.date);
       if (doc && shift && date && name) {
@@ -513,6 +520,7 @@ function handleCall(ws, deps, activeCalls, req) {
     const result = await booking.validateAndBook({
       request,
       patientName: name,
+      clientName: name,
       phone: session.callerPhone,
       callSid,
     });
