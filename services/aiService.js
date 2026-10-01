@@ -22,6 +22,7 @@ const TAGS = {
   draftEnd: "<<END_DRAFT_JSON>>",
   bookStart: "<<BOOKING_JSON>>",
   bookEnd: "<<END_BOOKING_JSON>>",
+  endCall: "<<END_CALL>>",
 };
 
 const KNOWLEDGE = buildKnowledgeText();
@@ -80,6 +81,10 @@ ${availabilityText || "(availability abhi load nahi hui — pehle property prefe
 5. Naam aur details confirm karo:
    "तो रमेश शर्मा जी, सिटी ग्रीन्स में 2 BHK फ्लैट के लिए, कल सुबह दस बजे साइट विज़िट बुक कर दूँ?"
 6. Caller "हाँ / कर दीजिए / ठीक है" bole TABHI booking tag do. Tag ke saath bas itna bolo: "ठीक है, आपकी साइट विज़िट बुक कर रही हूँ।"
+7. CALL CLOSING & DISCONNECT (Bahut Zaroori):
+   - Jab enquiry poori ho jaye, site visit confirm ho chuki ho, ya caller kahe "नहीं, बस इतना ही" / "ठीक है, धन्यवाद" / "ओके बाय" / "अलविदा":
+   - Aakhri greeting me hamesha bolo: "बात करने के लिए धन्यवाद, आपका दिन शुभ हो!" ya "धन्यवाद, आपका दिन शुभ हो!"
+   - Aakhir me ${TAGS.endCall} tag lagao. Iske baad koi naya sawaal mat poocho kyunki agent turant call disconnect karega.
 
 ## CALL STATE
 ${JSON.stringify(state)}
@@ -242,7 +247,13 @@ function parseReply(raw) {
     .replace(/\s+/g, " ")
     .trim();
 
-  return { speech, draft, booking };
+  const endCall = Boolean(
+    text.includes(TAGS.endCall) ||
+    /<<END_CALL>>|<<HANGUP>>/i.test(text) ||
+    /(?:आपका\s*दिन\s*शुभ\s*हो|दिन\s*शुभ\s*हो|apka\s*din\s*shubh\s*ho|shubh\s*din|have\s*a\s*(?:nice|great|good)\s*day)/i.test(speech)
+  );
+
+  return { speech, draft, booking, endCall };
 }
 
 module.exports = { getAIReply, parseReply, buildSystemPrompt, normalizeMessages, TAGS };

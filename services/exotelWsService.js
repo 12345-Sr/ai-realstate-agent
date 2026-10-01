@@ -54,12 +54,17 @@ const PHRASES = {
   emergency: "कृपया तुरंत आपातकालीन हेल्पलाइन 112 पर कॉल करें।",
   emergencyFollowUp: "क्या आप किसी प्रॉपर्टी की जानकारी या साइट विज़िट के लिए बात करना चाहते हैं?",
   handoff: realestateConfig.handoffReply,
+  closing: realestateConfig.closingReply || "बात करने के लिए धन्यवाद, आपका दिन शुभ हो!",
 };
 
 const EMERGENCY_RE =
   /(?:सीने|छाती)\s*में\s*(?:बहुत\s*)?(?:तेज़?|भयंकर)\s*दर्द|हार्ट\s*अटैक|heart\s*attack|(?:सांस|साँस)\s*(?:नहीं\s*(?:आ|ले)|लेने\s*में\s*(?:बहुत\s*)?(?:दिक्कत|तकलीफ))|बेहोश|unconscious|एक्सीडेंट|accident|दुर्घटना|खून\s*(?:बह|निकल)|लकवा|स्ट्रोक|stroke|ज़हर|जहर\s*खा|दौरा\s*पड़|suicide|आत्महत्या/i;
 const HANDOFF_RE =
   /(?:किसी\s*)?(?:इंसान|आदमी|व्यक्ति|रिसेप्शन|रिसेप्शनिस्ट|ऑपरेटर|मैनेजर|staff|human|operator|receptionist|real\s*person)\s*(?:से)?\s*(?:बात|जोड़|connect|transfer)/i;
+const CALL_CLOSE_RE =
+  /(?:आपका\s*दिन\s*शुभ\s*हो|दिन\s*शुभ\s*हो|apka\s*din\s*shubh\s*ho|shubh\s*din|have\s*a\s*(?:nice|great|good)\s*day)/i;
+const USER_GOODBYE_RE =
+  /(?:^(?:ठीक\s*है|अच्छा|ओके|ok)?\s*(?:बाय|अलविदा|bye|goodbye|tata|टाटा)\b)|(?:(?:बाय|bye)\s*(?:बाय|bye)?$)|(?:^(?:बस\s*इतना\s*ही|और\s*कुछ\s*नहीं)\s*$)/i;
 
 function defaultDeps() {
   return {
@@ -131,12 +136,12 @@ function handleCall(ws, deps, activeCalls) {
   let cooldownUntil = 0;
   const isBotSpeaking = () => Boolean(current);
 
-  function play(text, { cacheable = false } = {}) {
+  function play(text, { cacheable = false, noBargeIn = false } = {}) {
     if (!text || closed) return Promise.resolve(false);
     if (current) stopPlayback("replaced");
     clearIdle();
     const id = ++playSeq;
-    const p = { id, ac: new AbortController(), pending: Buffer.alloc(0), sentMs: 0, startAt: 0, ttsDone: false, finished: false, startedAt: Date.now(), text };
+    const p = { id, ac: new AbortController(), pending: Buffer.alloc(0), sentMs: 0, startAt: 0, ttsDone: false, finished: false, startedAt: Date.now(), text, noBargeIn };
     current = p;
     let resolveDone;
     p.done = new Promise((r) => (resolveDone = r));
@@ -244,6 +249,7 @@ function handleCall(ws, deps, activeCalls) {
 
     // Bot is talking: only a clear, sustained voice counts as barge-in
     if (isBotSpeaking()) {
+      if (current?.noBargeIn) return;
       if (!CONF.bargeIn || Date.now() - current.startedAt < CONF.bargeInGraceMs) return;
       const bargeThr = Math.max(650, speechThr * 1.15);
       bargeLoudMs = rms > bargeThr ? bargeLoudMs + chunkMs : Math.max(0, bargeLoudMs - chunkMs);
@@ -346,6 +352,14 @@ function handleCall(ws, deps, activeCalls) {
       await handoff("caller_request");
       return;
     }
+    if (USER_GOODBYE_RE.test(userText)) {
+      commitUser(turn, userText);
+      commitAssistant(PHRASES.closing);
+      await play(PHRASES.closing, { cacheable: true, noBargeIn: true });
+      await new Promise((r) => setTimeout(r, 800));
+      await hangupCall("caller_goodbye");
+      return;
+    }
 
     applyCallerTurn(session, userText, heuristics);
 
@@ -372,7 +386,7 @@ function handleCall(ws, deps, activeCalls) {
     if (turn.ac.signal.aborted || inflight !== turn || closed) return;
 
     commitUser(turn, userText);
-    const { speech: llmSpeech, draft, booking: bookReq } = ai.parseReply(raw);
+    const { speech: llmSpeech, draft, booking: bookReq, endCall } = ai.parseReply(raw);
     applyDraft(draft);
 
     let speech = llmSpeech;
@@ -386,9 +400,19 @@ function handleCall(ws, deps, activeCalls) {
     }
     if (!speech) speech = PHRASES.sorry;
 
+    const isClosing = Boolean(endCall || CALL_CLOSE_RE.test(speech));
+
     commitAssistant(speech);
     if (fillerPlayback) await fillerPlayback; // filler ko beech me mat kaato
     if (inflight !== turn || closed) return;
+
+    if (isClosing) {
+      await play(speech, { noBargeIn: true });
+      await new Promise((r) => setTimeout(r, 800));
+      await hangupCall("completed_with_closing_greeting");
+      return;
+    }
+
     await play(speech);
   }
 
@@ -483,6 +507,31 @@ function handleCall(ws, deps, activeCalls) {
     await play(PHRASES.handoff, { cacheable: true });
     // Stream band => Exotel flow ka AGLA applet chalega (e.g. Connect -> reception)
     setTimeout(() => ws.close(1000, "handoff"), 300);
+  }
+
+  async function hangupCall(reason = "completed") {
+    if (closed) return;
+    log(`🛑 Ending call: ${reason}`);
+    const { EXOTEL_SID: sid, EXOTEL_API_KEY: key, EXOTEL_API_TOKEN: token } = process.env;
+    if (sid && key && token && callSid && !callSid.startsWith("EXO_")) {
+      try {
+        await fetch(`https://api.exotel.com/v1/Accounts/${sid}/Calls/${callSid}.json`, {
+          method: "POST",
+          headers: {
+            Authorization: "Basic " + Buffer.from(`${key}:${token}`).toString("base64"),
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({ Status: "completed" }).toString(),
+          signal: AbortSignal.timeout(3000),
+        });
+      } catch (err) {
+        console.warn("[exotel] hangup API error:", err.message);
+      }
+    }
+    finishCall(reason);
+    try {
+      ws.close(1000, reason);
+    } catch {}
   }
 
   // ------------------------------------------------------------ idle reprompt

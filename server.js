@@ -62,8 +62,8 @@ connectDB()
     server.listen(PORT, () => {
       const domain = (process.env.BASE_URL || `localhost:${PORT}`).replace(/^https?:\/\//, "").replace(/\/$/, "");
       console.log(`[server] listening on ${PORT} | Exotel stream URL: wss://${domain}/exotel/media`);
-      // Greeting + fillers pehle se render => call uthte hi awaaz, LLM slow ho to filler turant
-      preWarmTTS([PHRASES.greeting, ...PHRASES.fillers, ...PHRASES.reprompts, PHRASES.goodbye, PHRASES.handoff], [8000]).catch(
+      // Greeting + fillers + closing pehle se render => call uthte hi awaaz, LLM slow ho to filler turant
+      preWarmTTS([PHRASES.greeting, ...PHRASES.fillers, ...PHRASES.reprompts, PHRASES.goodbye, PHRASES.handoff, PHRASES.closing], [8000]).catch(
         (err) => console.warn("[server] TTS pre-warm failed (non-fatal):", err.message)
       );
     });
