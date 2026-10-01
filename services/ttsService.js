@@ -133,8 +133,11 @@ function wavToPcm(wav, dstRate) {
 // ---------------------------------------------------------------- engines
 const ELEVEN_RATES = [8000, 16000, 22050, 24000];
 
+let elevenDisabledUntil = 0;
+
 /** Streams PCM chunks to onChunk as they arrive. Returns total bytes, or 0 on failure. */
 async function synthElevenLabsStream(text, rate, { signal, onChunk }) {
+  if (Date.now() < elevenDisabledUntil) return 0;
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) return 0;
   const voiceId = process.env.ELEVENLABS_VOICE_ID || "EXAVITQu4vr4xnSDxMaL";
@@ -160,7 +163,12 @@ async function synthElevenLabsStream(text, rate, { signal, onChunk }) {
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(8000)]) : AbortSignal.timeout(8000),
   });
   if (!res.ok || !res.body) {
-    console.warn(`[tts] ElevenLabs ${res.status}: ${(await res.text().catch(() => "")).slice(0, 160)}`);
+    const errText = (await res.text().catch(() => "")).slice(0, 160);
+    console.warn(`[tts] ElevenLabs ${res.status}: ${errText}`);
+    if (res.status === 401 || res.status === 429) {
+      elevenDisabledUntil = Date.now() + 30 * 60 * 1000; // 30 min cooldown
+      console.warn("[tts] ElevenLabs paused for 30 minutes due to 401/429");
+    }
     return 0;
   }
 

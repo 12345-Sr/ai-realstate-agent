@@ -86,18 +86,15 @@ function setupExotelWebSocketServer(httpServer, overrides = {}) {
     try {
       pathname = new URL(request.url, "http://x").pathname;
     } catch { }
-    if (["/exotel/media", "/media", "/stream"].includes(pathname)) {
-      wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request));
-    } else {
-      socket.destroy();
-    }
+    console.log(`[ws-upgrade] 🔌 WebSocket connection request on: ${request.url} (path: ${pathname})`);
+    wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request));
   });
 
-  wss.on("connection", (ws) => handleCall(ws, deps, httpServer.activeCalls));
+  wss.on("connection", (ws, req) => handleCall(ws, deps, httpServer.activeCalls, req));
   return wss;
 }
 
-function handleCall(ws, deps, activeCalls) {
+function handleCall(ws, deps, activeCalls, req) {
   const { ai, tts, booking, CallLog } = deps;
   const db = (p) => Promise.resolve(p).catch((e) => console.error("[db]", e.message));
 
@@ -107,6 +104,21 @@ function handleCall(ws, deps, activeCalls) {
   let sampleRate = 8000;
   let callStart = Date.now();
   let closed = false;
+
+  // Extract query parameters from WS request URL if present
+  let urlParams = {};
+  if (req && req.url) {
+    try {
+      const parsed = new URL(req.url, "http://localhost");
+      urlParams = Object.fromEntries(parsed.searchParams.entries());
+    } catch {}
+  }
+  if (urlParams.CallSid || urlParams.callSid || urlParams.call_sid) {
+    callSid = urlParams.CallSid || urlParams.callSid || urlParams.call_sid;
+  }
+  if (urlParams.stream_sid || urlParams.streamSid) {
+    streamSid = urlParams.stream_sid || urlParams.streamSid;
+  }
 
   // Frame math (Exotel: >= 3200 bytes, multiple of 320)
   let FRAME_BYTES = 3200;
@@ -126,6 +138,7 @@ function handleCall(ws, deps, activeCalls) {
   // ------------------------------------------------------------ outbound
   let sentFrames = 0;
   let inFrames = 0;
+  let chunkCount = 0;
 
   const send = (obj) => {
     if (ws.readyState === ws.OPEN) {
@@ -133,6 +146,10 @@ function handleCall(ws, deps, activeCalls) {
       const sid = streamSid || "default";
       payload.stream_sid = sid;
       payload.streamSid = sid;
+      if (payload.media && typeof payload.media === "object") {
+        payload.media.stream_sid = sid;
+        payload.media.streamSid = sid;
+      }
       try {
         ws.send(JSON.stringify(payload));
       } catch (err) {
@@ -142,13 +159,42 @@ function handleCall(ws, deps, activeCalls) {
   };
   const sendMedia = (buf) => {
     sentFrames++;
+    chunkCount++;
     if (sentFrames === 1 || sentFrames % 40 === 0) {
       log(`🔊 Outbound audio frame #${sentFrames} (${buf.length}B, sid=${streamSid})`);
     }
-    send({ event: "media", media: { payload: buf.toString("base64") } });
+    const sid = streamSid || "default";
+    send({
+      event: "media",
+      stream_sid: sid,
+      streamSid: sid,
+      media: {
+        payload: buf.toString("base64"),
+        chunk: chunkCount,
+        timestamp: String(Math.round(sentFrames * FRAME_MS)),
+        stream_sid: sid,
+        streamSid: sid,
+      },
+    });
   };
-  const sendClear = () => send({ event: "clear" });
-  const sendMark = (name) => send({ event: "mark", mark: { name } });
+  const sendClear = () => {
+    const sid = streamSid || "default";
+    send({
+      event: "clear",
+      stream_sid: sid,
+      streamSid: sid,
+      clear: { stream_sid: sid, streamSid: sid },
+    });
+  };
+  const sendMark = (name) => {
+    const sid = streamSid || "default";
+    send({
+      event: "mark",
+      stream_sid: sid,
+      streamSid: sid,
+      mark: { name, stream_sid: sid, streamSid: sid },
+    });
+  };
 
   let current = null; // active playback
   let playSeq = 0;
@@ -567,7 +613,11 @@ function handleCall(ws, deps, activeCalls) {
     }
   }
 
-  function onStart(data) {
+  let started = false;
+  function onStart(data = {}) {
+    if (started) return;
+    started = true;
+    clearTimeout(safetyStartTimer);
     const st = data.start || {};
     streamSid =
       data.stream_sid ||
@@ -595,6 +645,7 @@ function handleCall(ws, deps, activeCalls) {
       data.callId ||
       st.CallUUID ||
       data.CallUUID ||
+      callSid ||
       `EXO_${Date.now()}`;
     callStart = Date.now();
     const rate = parseInt(
@@ -645,9 +696,18 @@ function handleCall(ws, deps, activeCalls) {
     play(PHRASES.greeting, { cacheable: true });
   }
 
+  // Safety timer: agar Exotel ne explicit "start" event na bheja ho to 800ms me greeting shuru
+  const safetyStartTimer = setTimeout(() => {
+    if (!started && !closed) {
+      log("⚡ Safety: starting call greeting after 800ms without explicit 'start' event");
+      onStart({});
+    }
+  }, 800);
+
   function finishCall(reason) {
     if (closed) return;
     closed = true;
+    clearTimeout(safetyStartTimer);
     clearIdle();
     if (current) {
       current.ac.abort();
@@ -704,6 +764,10 @@ function handleCall(ws, deps, activeCalls) {
         onStart(data);
         break;
       case "media": {
+        if (!started) {
+          log("⚡ Starting call greeting on first incoming media event");
+          onStart(data);
+        }
         const payload = data.media?.payload || data.media?.Payload || data.payload;
         if (session && payload) onAudio(Buffer.from(payload, "base64"));
         break;
@@ -727,7 +791,10 @@ function handleCall(ws, deps, activeCalls) {
         break;
     }
   });
-  ws.on("close", () => finishCall("ws_close"));
+  ws.on("close", () => {
+    clearTimeout(safetyStartTimer);
+    finishCall("ws_close");
+  });
   ws.on("error", (err) => console.error("[ws]", err.message));
 }
 

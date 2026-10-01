@@ -8,6 +8,46 @@ const { requireApiKey } = require("../middleware/auth");
 const router = express.Router();
 
 /**
+ * Voicebot / AgentStream dynamic endpoint.
+ * When Exotel Voicebot applet uses dynamic URL, Exotel sends HTTP GET/POST:
+ * It expects JSON: { "url": "wss://..." }
+ */
+router.all(["/media", "/stream", "/voicebot", "/agentstream"], async (req, res) => {
+  const domain = (process.env.BASE_URL || "ai-realstate-agent.onrender.com").replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const wsUrl = `wss://${domain}/exotel/media`;
+  const params = { ...req.query, ...req.body };
+  const callSid = params.CallSid || params.CallUUID;
+  const from = params.From || params.Caller;
+  const to = params.To;
+
+  console.log(`[exotel-http] 📞 Applet dynamic URL requested on ${req.originalUrl || req.url} | callSid=${callSid || "?"} from=${from || "?"} to=${to || "?"}`);
+
+  if (callSid) {
+    CallLog.findOneAndUpdate(
+      { callSid },
+      {
+        $setOnInsert: {
+          callSid,
+          direction: "inbound",
+          startedAt: new Date(),
+          ...(from ? { from } : {}),
+          ...(to ? { to } : {}),
+        },
+      },
+      { upsert: true }
+    ).catch((err) => console.error("[exotel-http] DB log error:", err.message));
+  }
+
+  res.status(200).json({
+    url: wsUrl,
+    stream_url: wsUrl,
+    ws_url: wsUrl,
+    endpoint: wsUrl,
+    status: "ok",
+  });
+});
+
+/**
  * Exotel Greeting applet ("Read text from URL"). text/plain return karta hai.
  */
 router.all("/greeting", async (req, res) => {

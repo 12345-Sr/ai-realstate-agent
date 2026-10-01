@@ -35,11 +35,45 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 app.use(express.json({ limit: "100kb" }));
 
+// Request logging for live call debugging
+app.use((req, res, next) => {
+  if (req.path !== "/health") {
+    console.log(`[http] ${req.method} ${req.originalUrl || req.url} from ${req.headers["x-forwarded-for"] || req.socket.remoteAddress}`);
+  }
+  next();
+});
+
 const server = http.createServer(app);
 server.keepAliveTimeout = 65_000;
 server.headersTimeout = 66_000;
 
-app.get("/", (req, res) => res.json({ status: "online", service: "AI Real Estate Calling Agent (City Heights Realty)", wsEndpoint: "/exotel/media" }));
+const getWsUrl = () => {
+  const domain = (process.env.BASE_URL || "ai-realstate-agent.onrender.com").replace(/^https?:\/\//, "").replace(/\/$/, "");
+  return `wss://${domain}/exotel/media`;
+};
+
+app.get("/", (req, res) => {
+  const wsUrl = getWsUrl();
+  res.json({
+    status: "online",
+    service: "AI Real Estate Calling Agent (City Heights Realty)",
+    wsEndpoint: "/exotel/media",
+    url: wsUrl,
+    stream_url: wsUrl,
+  });
+});
+
+app.all(["/media", "/stream", "/voicebot", "/agentstream", "/exotel/media"], (req, res) => {
+  const wsUrl = getWsUrl();
+  console.log(`[server-http] 📞 Applet dynamic URL requested on ${req.originalUrl || req.url}`);
+  res.status(200).json({
+    url: wsUrl,
+    stream_url: wsUrl,
+    ws_url: wsUrl,
+    endpoint: wsUrl,
+    status: "ok",
+  });
+});
 
 app.get("/health", (req, res) => {
   const dbUp = mongoose.connection.readyState === 1;
