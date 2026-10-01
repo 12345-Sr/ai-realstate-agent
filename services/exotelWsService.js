@@ -134,10 +134,29 @@ function handleCall(ws, deps, activeCalls) {
   const log = (...a) => console.log(`[call ${callSid ? callSid.slice(-6) : "------"}]`, ...a);
 
   // ------------------------------------------------------------ outbound
+  let sentFrames = 0;
+  let inFrames = 0;
+
   const send = (obj) => {
-    if (ws.readyState === ws.OPEN && streamSid) ws.send(JSON.stringify({ ...obj, stream_sid: streamSid }));
+    if (ws.readyState === ws.OPEN) {
+      const payload = { ...obj };
+      const sid = streamSid || "default";
+      payload.stream_sid = sid;
+      payload.streamSid = sid;
+      try {
+        ws.send(JSON.stringify(payload));
+      } catch (err) {
+        console.error("[ws-send] error:", err.message);
+      }
+    }
   };
-  const sendMedia = (buf) => send({ event: "media", media: { payload: buf.toString("base64") } });
+  const sendMedia = (buf) => {
+    sentFrames++;
+    if (sentFrames === 1 || sentFrames % 40 === 0) {
+      log(`🔊 Outbound audio frame #${sentFrames} (${buf.length}B, sid=${streamSid})`);
+    }
+    send({ event: "media", media: { payload: buf.toString("base64") } });
+  };
   const sendClear = () => send({ event: "clear" });
   const sendMark = (name) => send({ event: "mark", mark: { name } });
 
@@ -246,9 +265,14 @@ function handleCall(ws, deps, activeCalls) {
   }
 
   function onAudio(chunk) {
+    if (!chunk || !chunk.length) return;
+    inFrames++;
     const chunkMs = (chunk.length / (sampleRate * 2)) * 1000;
     if (!chunkMs) return;
     const rms = calculatePcmRms(chunk);
+    if (inFrames === 1 || inFrames % 100 === 0) {
+      log(`🎧 Inbound audio frame #${inFrames} (${chunk.length}B, rms=${rms.toFixed(1)})`);
+    }
 
     preRoll.push(chunk);
     preRollMs += chunkMs;
@@ -562,7 +586,7 @@ function handleCall(ws, deps, activeCalls) {
   }
   function armIdle() {
     clearIdle();
-    if (closed || handingOff || !streamSid) return;
+    if (closed || handingOff) return;
     idleTimer = setTimeout(async () => {
       if (isBotSpeaking() || capturing || (inflight && !inflight.committed) || pendingText) return armIdle();
       if (reprompts >= CONF.maxReprompts) {
@@ -603,20 +627,64 @@ function handleCall(ws, deps, activeCalls) {
 
   function onStart(data) {
     const st = data.start || {};
-    streamSid = data.stream_sid || st.stream_sid;
-    callSid = st.call_sid || data.call_sid || `EXO_${Date.now()}`;
+    streamSid =
+      data.stream_sid ||
+      data.streamSid ||
+      data.StreamSid ||
+      st.stream_sid ||
+      st.streamSid ||
+      st.StreamSid ||
+      data.stream_id ||
+      st.stream_id ||
+      data.streamId ||
+      st.streamId ||
+      streamSid ||
+      "default";
+    callSid =
+      st.call_sid ||
+      st.callSid ||
+      st.CallSid ||
+      data.call_sid ||
+      data.callSid ||
+      data.CallSid ||
+      st.call_id ||
+      st.callId ||
+      data.call_id ||
+      data.callId ||
+      st.CallUUID ||
+      data.CallUUID ||
+      `EXO_${Date.now()}`;
     callStart = Date.now();
-    const rate = parseInt(st.media_format?.sample_rate || 8000, 10);
+    const rate = parseInt(
+      st.media_format?.sample_rate ||
+      st.mediaFormat?.sampleRate ||
+      st.media_format?.sampleRate ||
+      data.media_format?.sample_rate ||
+      data.mediaFormat?.sampleRate ||
+      st.sample_rate ||
+      st.sampleRate ||
+      8000,
+      10
+    );
     if ([8000, 16000, 24000].includes(rate)) setRate(rate);
     activeCalls.add(callSid);
 
     session = getSession(callSid);
-    const from = st.from || st.custom_parameters?.from || data.from;
+    const from =
+      st.from ||
+      st.From ||
+      st.caller ||
+      st.Caller ||
+      st.custom_parameters?.from ||
+      st.customParameters?.from ||
+      data.from ||
+      data.From;
     if (from) {
       session.callerPhone = from;
       session.region = detectRegion(from);
     }
-    log(`📞 start from=${from || "?"} rate=${sampleRate} frame=${FRAME_BYTES}B`);
+    const to = st.to || st.To || data.to || data.To;
+    log(`📞 start from=${from || "?"} to=${to || "?"} sid=${streamSid} callSid=${callSid} rate=${sampleRate} frame=${FRAME_BYTES}B`);
 
     if (!session.messages.length || session.messages[session.messages.length - 1].content !== PHRASES.greeting) {
       session.messages.push({ role: "assistant", content: PHRASES.greeting });
@@ -625,7 +693,7 @@ function handleCall(ws, deps, activeCalls) {
       CallLog.findOneAndUpdate(
         { callSid },
         {
-          $setOnInsert: { callSid, direction: "inbound", startedAt: new Date(), ...(from ? { from } : {}), ...(st.to ? { to: st.to } : {}) },
+          $setOnInsert: { callSid, direction: "inbound", startedAt: new Date(), ...(from ? { from } : {}), ...(to ? { to } : {}) },
           $push: { transcript: { role: "assistant", text: PHRASES.greeting, timestamp: new Date() } },
         },
         { upsert: true }
@@ -664,24 +732,47 @@ function handleCall(ws, deps, activeCalls) {
     } catch {
       return;
     }
+
+    const incomingStream =
+      data.stream_sid ||
+      data.streamSid ||
+      data.StreamSid ||
+      data.start?.stream_sid ||
+      data.start?.streamSid ||
+      data.start?.StreamSid ||
+      data.media?.stream_sid ||
+      data.media?.streamSid ||
+      data.stream_id ||
+      data.streamId;
+    if (incomingStream && (!streamSid || streamSid === "default")) {
+      streamSid = incomingStream;
+      log(`🎯 Captured streamSid=${streamSid} from event=${data.event}`);
+    }
+
+    if (data.event !== "media") {
+      log(`📥 Exotel event: "${data.event}" | payload: ${JSON.stringify(data).slice(0, 300)}`);
+    }
+
     switch (data.event) {
       case "connected":
-        if (data.stream_sid) streamSid = data.stream_sid;
+        if (data.stream_sid || data.streamSid) streamSid = data.stream_sid || data.streamSid;
         log(`🔌 Exotel stream connected: ${streamSid || "ready"}`);
         break;
       case "start":
         onStart(data);
         break;
-      case "media":
-        if (session && data.media?.payload) onAudio(Buffer.from(data.media.payload, "base64"));
+      case "media": {
+        const payload = data.media?.payload || data.media?.Payload || data.payload;
+        if (session && payload) onAudio(Buffer.from(payload, "base64"));
         break;
+      }
       case "mark": {
-        const name = data.mark?.name;
+        const name = data.mark?.name || data.mark?.Name || data.name;
         if (current && name === `p${current.id}` && current.ttsDone && !current.pending.length) current.finish(true);
         break;
       }
       case "dtmf": {
-        const digit = data.dtmf?.digit;
+        const digit = data.dtmf?.digit || data.dtmf?.Digit || data.digit;
         log(`🔢 DTMF ${digit}`);
         if (digit === "0" && CONF.handoff && !handingOff) {
           stopPlayback("dtmf");
@@ -690,7 +781,7 @@ function handleCall(ws, deps, activeCalls) {
         break;
       }
       case "stop":
-        finishCall(data.stop?.reason || "stop");
+        finishCall(data.stop?.reason || data.reason || "stop");
         break;
     }
   });
