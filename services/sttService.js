@@ -86,12 +86,13 @@ async function transcribePcmAudio(pcmBuffer, sampleRate = 8000, { signal } = {})
   formData.append("file", blob, "audio.wav");
   // whisper-large-v3 = Hindi me zyada accurate; "-turbo" = tez. Env se chuno.
   formData.append("model", process.env.STT_MODEL || "whisper-large-v3");
-  // Whisper default hi locks recognition to Hindi/Devanagari and stops foreign language hallucinations
-  formData.append("language", process.env.STT_LANGUAGE || "hi");
+  if (process.env.STT_LANGUAGE) {
+    formData.append("language", process.env.STT_LANGUAGE);
+  }
   formData.append("temperature", "0");
   formData.append(
     "prompt",
-    "नमस्ते, मैं मोनिका हूँ, आपकी प्रॉपर्टी असिस्टेंट। आज आप कैसे हैं? ठीक हूँ, अच्छा हूँ, बढ़िया, प्रॉपर्टी, फ्लैट, 2 BHK, 3 BHK, विला, प्लॉट, कमर्शियल, साइट विज़िट, बजट, सिटी ग्रीन्स, रॉयल पाम विला, कानपुर, City Heights Realty."
+    "नमस्ते, मैं मोनिका हूँ, Deific Digital से आपकी प्रॉपर्टी असिस्टेंट। How are you? ठीक हूँ, अच्छा हूँ, बढ़िया, प्रॉपर्टी, फ्लैट, 2 BHK, 3 BHK, विला, प्लॉट, कमर्शियल, साइट विज़िट, बजट, सिटी ग्रीन्स, रॉयल पाम विला, कानपुर, लखनऊ, Deific Digital."
   );
 
   const apiKey = (process.env.GROQ_API_KEY || "").replace(/^GROQ_API_KEY=/, "").trim();
