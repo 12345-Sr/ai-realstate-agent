@@ -18,8 +18,8 @@ const { MPEGDecoder } = require("mpg123-decoder");
 
 const EDGE_VOICE = process.env.TTS_VOICE || "hi-IN-SwaraNeural";
 const EDGE_PROSODY = {
-  rate: process.env.TTS_RATE || "-5%",
-  pitch: process.env.TTS_PITCH || "-2Hz",
+  rate: process.env.TTS_RATE || "+10%",
+  pitch: process.env.TTS_PITCH || "+0Hz",
   volume: process.env.TTS_VOLUME || "+5%",
 };
 
@@ -199,7 +199,7 @@ async function synthSarvam(text, rate, signal) {
       target_language_code: "hi-IN",
       speaker: process.env.SARVAM_SPEAKER || "anushka",
       model: process.env.SARVAM_MODEL || "bulbul:v2",
-      pace: 1.0,
+      pace: Number(process.env.SARVAM_PACE || 1.1),
       speech_sample_rate: rate,
       enable_preprocessing: true,
     }),

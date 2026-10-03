@@ -129,7 +129,7 @@ function handleCall(ws, deps, activeCalls, req) {
     const bytesPer100ms = Math.round((r * 2 * 0.1) / 320) * 320;
     FRAME_BYTES = Math.max(3200, bytesPer100ms);
     FRAME_MS = (FRAME_BYTES / (r * 2)) * 1000;
-    LEAD_MS = Math.max(400, FRAME_MS * 2);
+    LEAD_MS = Math.max(1000, FRAME_MS * 4);
   };
   setRate(8000);
 
@@ -706,13 +706,13 @@ function handleCall(ws, deps, activeCalls, req) {
     play(PHRASES.greeting, { cacheable: true });
   }
 
-  // Safety timer: agar Exotel ne explicit "start" event na bheja ho to 800ms me greeting shuru
+  // Safety timer: agar Exotel ne explicit "start" event na bheja ho to 2500ms me greeting shuru
   const safetyStartTimer = setTimeout(() => {
     if (!started && !closed) {
-      log("⚡ Safety: starting call greeting after 800ms without explicit 'start' event");
+      log("⚡ Safety: starting call greeting after 2500ms without explicit 'start' event");
       onStart({});
     }
-  }, 800);
+  }, 2500);
 
   function finishCall(reason) {
     if (closed) return;
