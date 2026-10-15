@@ -38,7 +38,7 @@ const CONF = {
   bargeIn: process.env.BARGE_IN !== "false",
   bargeInMs: num(process.env.BARGE_IN_MS, 300),
   bargeInGraceMs: num(process.env.BARGE_IN_GRACE_MS, 500),
-  fillerAfterMs: num(process.env.FILLER_AFTER_MS, 1300),
+  fillerAfterMs: num(process.env.FILLER_AFTER_MS, 0), // 0 = disabled (no "achha ek pal" interruption)
   idleRepromptMs: num(process.env.IDLE_REPROMPT_MS, 9000),
   maxReprompts: num(process.env.MAX_REPROMPTS, 2),
   echoCooldownMs: num(process.env.ECHO_COOLDOWN_MS, 250),
@@ -47,7 +47,7 @@ const CONF = {
 
 const PHRASES = {
   greeting: realestateConfig.greeting,
-  fillers: ["हम्म, एक सेकंड।", "जी, मैं चेक कर रही हूँ...", "अच्छा, एक पल।"],
+  fillers: [], // fillers disabled for seamless demo flow
   reprompts: ["जी, मैं सुन रही हूँ, बताइए?", "हेलो, क्या आप मुझे सुन पा रहे हैं?"],
   goodbye: "लगता है आवाज़ नहीं आ पा रही है। आप कभी भी दोबारा कॉल कर सकते हैं। धन्यवाद!",
   sorry: "माफ़ कीजिए, आवाज़ थोड़ी कट गई। एक बार फिर से बताएँगे?",
@@ -424,11 +424,14 @@ function handleCall(ws, deps, activeCalls, req) {
     applyCallerTurn(session, userText, heuristics);
 
     let fillerPlayback = null;
-    const fillerTimer = setTimeout(() => {
-      if (!turn.ac.signal.aborted && !isBotSpeaking() && !capturing) {
-        fillerPlayback = play(PHRASES.fillers[Math.floor(Math.random() * PHRASES.fillers.length)], { cacheable: true });
-      }
-    }, CONF.fillerAfterMs);
+    let fillerTimer = null;
+    if (CONF.fillerAfterMs > 0 && Array.isArray(PHRASES.fillers) && PHRASES.fillers.length > 0) {
+      fillerTimer = setTimeout(() => {
+        if (!turn.ac.signal.aborted && !isBotSpeaking() && !capturing) {
+          fillerPlayback = play(PHRASES.fillers[Math.floor(Math.random() * PHRASES.fillers.length)], { cacheable: true });
+        }
+      }, CONF.fillerAfterMs);
+    }
 
     let raw;
     try {
@@ -438,11 +441,12 @@ function handleCall(ws, deps, activeCalls, req) {
         availabilityText,
       });
     } catch (err) {
-      if (turn.ac.signal.aborted) return clearTimeout(fillerTimer);
+      if (fillerTimer) clearTimeout(fillerTimer);
+      if (turn.ac.signal.aborted) return;
       console.error("[ai]", err.message);
       raw = PHRASES.sorry;
     }
-    clearTimeout(fillerTimer);
+    if (fillerTimer) clearTimeout(fillerTimer);
     if (turn.ac.signal.aborted || inflight !== turn || closed) return;
 
     commitUser(turn, userText);
