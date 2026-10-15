@@ -69,48 +69,130 @@ function cleanTelephonyHindi(t) {
 const { cleanAndIsolateVoice } = require("../utils/audioDsp");
 
 /**
- * Transcribes audio buffer using Groq Whisper after deep DSP voice isolation and noise gating.
+ * Transcribes audio using Google Gemini Multimodal Audio API.
+ * Uses the user's GEMINI_API_KEY without needing Groq or Whisper.
  */
-async function transcribePcmAudio(pcmBuffer, sampleRate = 8000, { signal } = {}) {
-  // Discard audio shorter than 0.15 seconds (line noise, clicks) while preserving single-word answers ("हाँ", "जी", "फ्लैट")
-  const minBytes = Math.floor(sampleRate * 2 * 0.15);
-  if (!pcmBuffer || pcmBuffer.length < minBytes) {
+async function transcribeWithGemini(wavBuffer, { signal } = {}) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return "";
+
+  const base64Audio = wavBuffer.toString("base64");
+  const models = [
+    process.env.GEMINI_STT_MODEL || process.env.GEMINI_MODEL,
+    "gemini-3-flash-preview",
+    "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
+  ].filter(Boolean);
+
+  for (const model of models) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: "You are an accurate Hindi-English telephony transcriber. Transcribe what the caller said verbatim in Hindi (Devanagari) or English. If the caller was silent, breathed, or there is only line background noise/tone, respond with NOTHING (an empty string). Output ONLY the transcript, no greetings or explanations.",
+                },
+                { inlineData: { mimeType: "audio/wav", data: base64Audio } },
+              ],
+            },
+          ],
+          generationConfig: { maxOutputTokens: 120, temperature: 0.1 },
+        }),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000),
+      });
+
+      if (!res.ok) {
+        console.warn(`[sttService] Gemini STT (${model}) ${res.status}: ${(await res.text()).slice(0, 120)}`);
+        continue;
+      }
+
+      const data = await res.json();
+      const text = (data.candidates?.[0]?.content?.parts || [])
+        .filter((p) => !p.thought)
+        .map((p) => p.text || "")
+        .join("")
+        .trim();
+
+      if (text) {
+        // Discard typical silence hallucinations from multimodal LLMs
+        if (/^(hello\?|hello\s*hello|can you hear me\?|none|empty|\.)$/i.test(text)) {
+          return "";
+        }
+        return cleanTelephonyHindi(text);
+      }
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      console.warn(`[sttService] Gemini STT (${model}) error:`, err.message);
+    }
+  }
+  return "";
+}
+
+/**
+ * Transcribes audio using Deepgram Nova-2 (if DEEPGRAM_API_KEY is configured).
+ */
+async function transcribeWithDeepgram(wavBuffer, { signal } = {}) {
+  const apiKey = process.env.DEEPGRAM_API_KEY;
+  if (!apiKey) return "";
+
+  try {
+    const res = await fetch(
+      "https://api.deepgram.com/v1/listen?model=nova-2-general&language=hi&smart_format=true&punctuate=true",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Token ${apiKey}`,
+          "Content-Type": "audio/wav",
+        },
+        body: wavBuffer,
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(4000)]) : AbortSignal.timeout(4000),
+      }
+    );
+
+    if (!res.ok) return "";
+    const data = await res.json();
+    const text = data.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() || "";
+    return text ? cleanTelephonyHindi(text) : "";
+  } catch (err) {
+    console.warn("[sttService] Deepgram error:", err.message);
     return "";
   }
+}
 
-  // Deep DSP telephony voice isolation: 300Hz-3400Hz bandpass, adaptive noise gating, and AGC normalization
-  const filteredPcm = cleanAndIsolateVoice(pcmBuffer, sampleRate);
-  const wavBuffer = pcmToWav(filteredPcm, sampleRate);
+/**
+ * Transcribes audio using Groq Whisper with bulletproof hallucination gating.
+ */
+async function transcribeWithWhisper(wavBuffer, { signal } = {}) {
+  const apiKey = (process.env.GROQ_API_KEY || "").replace(/^GROQ_API_KEY=/, "").trim();
+  if (!apiKey) return "";
+
   const blob = new Blob([wavBuffer], { type: "audio/wav" });
   const formData = new FormData();
   formData.append("file", blob, "audio.wav");
-  // whisper-large-v3 = Hindi me zyada accurate; "-turbo" = tez. Env se chuno.
-  formData.append("model", process.env.STT_MODEL || "whisper-large-v3");
+  formData.append("model", process.env.STT_MODEL || "whisper-large-v3-turbo");
   if (process.env.STT_LANGUAGE) {
     formData.append("language", process.env.STT_LANGUAGE);
   }
   formData.append("temperature", "0");
   formData.append(
     "prompt",
-    "नमस्ते, मैं मोनिका हूँ, Deific Digital से आपकी प्रॉपर्टी असिस्टेंट। How are you? ठीक हूँ, अच्छा हूँ, बढ़िया, प्रॉपर्टी, फ्लैट, 2 BHK, 3 BHK, विला, प्लॉट, कमर्शियल, साइट विज़िट, बजट, सिटी ग्रीन्स, रॉयल पाम विला, कानपुर, लखनऊ, Deific Digital."
+    "नमस्ते, मैं मोनिका हूँ, Deific Digital से आपकी प्रॉपर्टी असिस्टेंट। प्रॉपर्टी, फ्लैट, 2 BHK, 3 BHK, विला, प्लॉट, साइट विज़िट, बजट।"
   );
-
-  const apiKey = (process.env.GROQ_API_KEY || "").replace(/^GROQ_API_KEY=/, "").trim();
 
   try {
     const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { Authorization: `Bearer ${apiKey}` },
       body: formData,
-      // 15s pehle tha — caller 15 second chup sunta. 6s ke baad "phir se boliye" behtar hai.
-      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(6000)]) : AbortSignal.timeout(6000),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(4000)]) : AbortSignal.timeout(4000),
     });
 
     if (!res.ok) {
-      const errText = await res.text();
-      console.error(`[sttService] Groq Whisper error ${res.status}:`, errText);
+      console.warn(`[sttService] Whisper error ${res.status}`);
       return "";
     }
 
@@ -119,43 +201,97 @@ async function transcribePcmAudio(pcmBuffer, sampleRate = 8000, { signal } = {})
 
     // Filter foreign script hallucinations (Tamil, Telugu, Malayalam, Arabic, etc.)
     if (/[\u0B80-\u0BFF\u0C00-\u0C7F\u0D00-\u0D7F\u0A80-\u0AFF\u0600-\u06FF]/i.test(text)) {
-      console.log(`[sttService] 🔇 Dropped foreign script hallucination: "${text}"`);
-      return "";
-    }
-    // Filter non-Indian/hallucinated noise words
-    if (/adi[oó]s|manejar|obrigad[oa]|por\s*favor|subtitles/i.test(text)) {
-      console.log(`[sttService] 🔇 Dropped foreign hallucination: "${text}"`);
       return "";
     }
 
-    // Guard against Whisper repeating prompt hallucinations on background silence / noise
+    // Filter non-Indian/hallucinated noise words
+    if (/adi[oó]s|manejar|obrigad[oa]|por\s*favor|subtitles/i.test(text)) {
+      return "";
+    }
+
+    // Guard against Whisper repeating prompt hallucinations
     if (
       /मोनिका.*प्रॉपर्टी असिस्टेंट/i.test(text) ||
       /सिटी\s*ग्रीन्स.*रॉयल\s*पाम/i.test(text) ||
-      /ग्राहक\s*का\s*नाम\s*spelling/i.test(text) ||
-      /नाम\s*की\s*स्पेलिंग\s*नाम\s*की/i.test(text) ||
+      /ग्राहक\s*का\s*नाम/i.test(text) ||
       text.includes("अपॉइंटमेंटमेंट")
     ) {
-      console.log(`[sttService] 🔇 Dropped Whisper prompt hallucination: "${text}"`);
       return "";
     }
 
-    // Clean common telephony distortions
-    text = cleanTelephonyHindi(text);
+    // Robust noise & silence hallucination check: strip all surrounding punctuation & spaces
+    const cleanCheck = text.replace(/[^\p{L}\p{N}]+/gu, " ").toLowerCase().trim();
+    const noiseWords = new Set([
+      "thank you",
+      "thank you so much",
+      "thanks",
+      "you",
+      "bye",
+      "goodbye",
+      "subtitles",
+      "watching",
+      "subscribe",
+      "like and share",
+      "amara",
+      "झाल",
+      "हूँ",
+    ]);
 
-    // Filter out common Whisper hallucination artifacts from background noise
-    const noiseWords = ["झाल", "you", "bye", ".", "...", "thank you", "subtitles"];
-    // Whisper ke famous silence-hallucinations (YouTube subtitles se seekhe hue)
-    if (/सब्सक्राइब|subscribe|like\s*and\s*share|अमारा\.org|amara\.org/i.test(text)) return "";
-    if (noiseWords.includes(text.toLowerCase()) || text.length < 2) {
+    if (!cleanCheck || cleanCheck.length < 2 || noiseWords.has(cleanCheck)) {
       return "";
     }
 
-    return text;
+    return cleanTelephonyHindi(text);
   } catch (err) {
-    console.error("[sttService] Transcription error:", err.message);
+    if (signal?.aborted) throw err;
+    console.warn("[sttService] Whisper error:", err.message);
     return "";
   }
 }
 
-module.exports = { pcmToWav, transcribePcmAudio, cleanTelephonyHindi };
+/**
+ * Main STT Entry Point.
+ * Selects engine based on STT_ENGINE env ('gemini' | 'whisper' | 'deepgram').
+ * Automatically falls back to secondary engine if primary returns empty/fails.
+ */
+async function transcribePcmAudio(pcmBuffer, sampleRate = 8000, { signal } = {}) {
+  const minBytes = Math.floor(sampleRate * 2 * 0.15);
+  if (!pcmBuffer || pcmBuffer.length < minBytes) {
+    return "";
+  }
+
+  // Deep DSP telephony voice isolation
+  const filteredPcm = cleanAndIsolateVoice(pcmBuffer, sampleRate);
+  const wavBuffer = pcmToWav(filteredPcm, sampleRate);
+
+  const engine = (process.env.STT_ENGINE || "gemini").toLowerCase();
+
+  if (engine === "gemini") {
+    // 1. Try Gemini STT
+    const geminiText = await transcribeWithGemini(wavBuffer, { signal });
+    if (geminiText) return geminiText;
+    // Fallback to Whisper if Gemini couldn't transcribe
+    return await transcribeWithWhisper(wavBuffer, { signal });
+  }
+
+  if (engine === "deepgram" && process.env.DEEPGRAM_API_KEY) {
+    const deepgramText = await transcribeWithDeepgram(wavBuffer, { signal });
+    if (deepgramText) return deepgramText;
+  }
+
+  // Default: Whisper with bulletproof hallucination gating
+  const whisperText = await transcribeWithWhisper(wavBuffer, { signal });
+  if (whisperText) return whisperText;
+
+  // Fallback to Gemini if Whisper failed
+  return await transcribeWithGemini(wavBuffer, { signal });
+}
+
+module.exports = {
+  pcmToWav,
+  transcribePcmAudio,
+  transcribeWithGemini,
+  transcribeWithWhisper,
+  transcribeWithDeepgram,
+  cleanTelephonyHindi,
+};

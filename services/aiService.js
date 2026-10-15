@@ -203,48 +203,29 @@ function anySignal(signals) {
   return ac.signal;
 }
 
-async function callGroq(messages, systemPrompt, signal) {
-  const apiKey = (process.env.GROQ_API_KEY || "").replace(/^GROQ_API_KEY=/, "").trim();
-  if (!apiKey) return null;
-  const body = {
-    model: process.env.GROQ_MODEL || "qwen/qwen3.8-27b",
-    temperature: Number(process.env.LLM_TEMPERATURE || 0.35),
-    max_tokens: 450,
-    messages: [{ role: "system", content: systemPrompt }, ...messages],
-  };
-  if (process.env.GROQ_REASONING_EFFORT) body.reasoning_effort = process.env.GROQ_REASONING_EFFORT;
-  if (process.env.GROQ_REASONING_FORMAT) body.reasoning_format = process.env.GROQ_REASONING_FORMAT;
-
-  try {
-    const res = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(body),
-      signal: anySignal([signal, AbortSignal.timeout(Number(process.env.GROQ_TIMEOUT_MS || 3200))]),
-    });
-    if (!res.ok) {
-      console.warn(`[ai] Groq ${res.status}: ${(await res.text()).slice(0, 160)}`);
-      return null;
-    }
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content?.trim() || null;
-  } catch (err) {
-    if (signal?.aborted) throw err;
-    console.warn("[ai] Groq error:", err.message);
-    return null;
-  }
-}
-
 async function callGemini(messages, systemPrompt, signal) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
-  const models = [...new Set([process.env.GEMINI_MODEL, "gemini-3.5-flash-lite", "gemini-2.5-flash-lite"].filter(Boolean))];
+  const models = [
+    ...new Set(
+      [
+        process.env.GEMINI_MODEL,
+        process.env.GEMINI_FALLBACK_MODEL,
+        "gemini-3-flash-preview",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash-lite",
+      ].filter(Boolean)
+    ),
+  ];
 
   const contents = messages.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
   }));
-  const generationConfig = { temperature: Number(process.env.LLM_TEMPERATURE || 0.35), maxOutputTokens: 450 };
+  const generationConfig = {
+    temperature: Number(process.env.LLM_TEMPERATURE || 0.35),
+    maxOutputTokens: 800,
+  };
 
   for (const model of models) {
     try {
@@ -252,7 +233,7 @@ async function callGemini(messages, systemPrompt, signal) {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({ system_instruction: { parts: [{ text: systemPrompt }] }, contents, generationConfig }),
-        signal: anySignal([signal, AbortSignal.timeout(Number(process.env.GEMINI_TIMEOUT_MS || 4500))]),
+        signal: anySignal([signal, AbortSignal.timeout(Number(process.env.GEMINI_TIMEOUT_MS || 5000))]),
       });
       if (!res.ok) {
         console.warn(`[ai] Gemini (${model}) ${res.status}: ${(await res.text()).slice(0, 160)}`);
@@ -282,13 +263,12 @@ async function callGemini(messages, systemPrompt, signal) {
 async function getAIReply(messages, session = {}, opts = {}) {
   const systemPrompt = buildSystemPrompt(session, opts);
   const windowed = normalizeMessages(messages.slice(-12));
-  const order = (process.env.LLM_PRIMARY || "groq") === "gemini" ? [callGemini, callGroq] : [callGroq, callGemini];
 
-  for (const fn of order) {
-    const reply = await fn(windowed, systemPrompt, opts.signal);
-    if (reply) return reply;
-  }
-  return "माफ़ कीजिए, आवाज़ थोड़ी कट गई थी, क्या आप दोबारा बताएँगे?";
+  // Pure Gemini model pipeline (Groq completely removed)
+  const reply = await callGemini(windowed, systemPrompt, opts.signal);
+  if (reply) return reply;
+
+  return "जी, मैं सुन रही हूँ, आप किस तरह की प्रॉपर्टी देखना पसंद करेंगे?";
 }
 
 function safeJson(str) {
