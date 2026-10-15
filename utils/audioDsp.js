@@ -126,12 +126,12 @@ function applyAdaptiveNoiseGate(int16Array, sampleRate = 8000) {
   // 2. Estimate ambient noise floor from lower 25th percentile of frame energies
   const sorted = Array.from(frameEnergies).sort((a, b) => a - b);
   const noiseFloor = sorted[Math.floor(sorted.length * 0.25)] || 80;
-  // Gentle threshold to never cut off soft consonants or word endings
-  const speechThreshold = Math.max(180, noiseFloor * 1.3);
+  // Gentle threshold to never cut off soft consonants or word endings on speaker
+  const speechThreshold = Math.max(140, noiseFloor * 1.2);
 
   const out = new Int16Array(int16Array.length);
   let currentGain = 1.0;
-  const floorGain = 0.45; // Gentle 7dB noise suppression without clipping soft speech
+  const floorGain = 0.55; // Gentle 5dB noise suppression without clipping soft speech
 
   // Fast attack (~3ms) to never clip initial consonants, smooth release (~40ms)
   const attackCoeff = 0.25;
@@ -163,7 +163,7 @@ function applyAdaptiveNoiseGate(int16Array, sampleRate = 8000) {
 }
 
 /**
- * Normalizes speech gain so quiet voices are brought to nominal level for Whisper.
+ * Normalizes speech gain so quiet voices (including speakerphone) are brought to nominal level for Whisper.
  */
 function normalizeSpeechGain(int16Array) {
   let peak = 0;
@@ -174,8 +174,8 @@ function normalizeSpeechGain(int16Array) {
 
   // Target peak level ~24000 (leaves ~3dB headroom below 32767)
   const targetPeak = 24000;
-  if (peak > 1500 && peak < 16000) {
-    const multiplier = Math.min(3.5, targetPeak / peak);
+  if (peak > 350 && peak < 18000) {
+    const multiplier = Math.min(4.5, targetPeak / peak);
     const out = new Int16Array(int16Array.length);
     for (let i = 0; i < int16Array.length; i++) {
       let val = int16Array[i] * multiplier;
@@ -242,7 +242,7 @@ function analyzeVoiceActivity(pcmBuffer, sampleRate = 8000) {
   // Noise floor estimate (20th percentile)
   const sorted = Array.from(frameRms).sort((a, b) => a - b);
   const noiseFloor = sorted[Math.floor(sorted.length * 0.20)] || 80;
-  const voiceThreshold = Math.max(250, noiseFloor * 1.4);
+  const voiceThreshold = Math.max(200, noiseFloor * 1.25);
 
   let voicedFrames = 0;
   for (let f = 0; f < numFrames; f++) {
@@ -254,12 +254,12 @@ function analyzeVoiceActivity(pcmBuffer, sampleRate = 8000) {
   const voicedMs = voicedFrames * 20;
   const speechRatio = voicedFrames / numFrames;
 
-  // Genuine human speech turn requirements:
-  // 1. Must contain at least 80ms of voiced audio (allows single-word "हाँ", "जी", "फ्लैट")
-  // 2. Voiced ratio must be at least 6% of the total recording
-  // 3. Peak RMS must be higher than the ambient noise floor
+  // Genuine human speech turn requirements (tuned for phone and speakerphone):
+  // 1. Must contain at least 60ms of voiced audio (allows single-word "हाँ", "जी", "फ्लैट")
+  // 2. Voiced ratio must be at least 3.5% of total recording
+  // 3. Peak RMS must be higher than ambient noise floor
   const isGenuineSpeech =
-    voicedMs >= 80 && speechRatio >= 0.05 && maxRms > noiseFloor * 1.25;
+    voicedMs >= 60 && speechRatio >= 0.035 && maxRms > noiseFloor * 1.15;
 
   return {
     isGenuineSpeech,

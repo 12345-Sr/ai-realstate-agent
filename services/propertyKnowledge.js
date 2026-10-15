@@ -91,20 +91,15 @@ function buildKnowledgeText() {
   const projs = (cfg.projects || [])
     .map(
       (p, i) =>
-        `${i + 1}. ${p.name} (${p.hindiName}) — ${p.type} / ${p.typeHindi}, ${p.location}. ` +
-        `कीमत: ${p.startingPrice || "₹45 लाख"} से शुरू. ` +
-        `सुविधाएँ: ${p.amenities}.`
+        `${i + 1}. ${p.name} (${p.hindiName}): ${p.typeHindi}, ${p.location}. कीमत: ${p.startingPrice || "₹45 लाख"} से शुरू.`
     )
     .join("\n");
   const shifts = cfg.shifts.map((s) => `${s.time} (${s.spoken})`).join(", ");
-  return `REAL ESTATE AGENCY: ${cfg.agencyNameEn} (${cfg.agencyName}), ${cfg.officeAddress}
-OFFICE PHONE: ${cfg.officePhone} | HELPDESK: ${cfg.helpdeskMobile}
-SITE VISIT HOURS: ${cfg.workingHoursText}
-SITE VISIT APPOINTMENT SHIFTS (only these 3): ${shifts}
-PROJECTS & PROPERTY CATALOG:
+  return `AGENCY: ${cfg.agencyNameEn} (${cfg.agencyName}), Kanpur. Office: ${cfg.officePhone}
+SITE VISIT TIMINGS: ${shifts}
+PROJECTS:
 ${projs}
-FAQ (FINANCING, RERA, REGISTRY):
-${cfg.faq.map((f) => "- " + f).join("\n")}`;
+OFFERS: इस हफ्ते साइट विज़िट बुक करने पर मॉड्यूलर किचन का फ़्री सेटअप। SBI/HDFC 85% होम लोन। Clear title & RERA registered.`;
 }
 
 module.exports = {

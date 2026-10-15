@@ -90,9 +90,14 @@ function slotProblem(doctor, dateIso, shift, clock = getClock()) {
   return null;
 }
 
+const mongoose = require("mongoose");
+
 async function bookedCounts(doctorName, dates) {
+  if (mongoose.connection.readyState !== 1) return {};
   try {
-    const rows = await models.SlotCounter.find({ doctorName, date: { $in: dates } }).lean();
+    const rows = await models.SlotCounter.find({ doctorName, date: { $in: dates } })
+      .maxTimeMS(800)
+      .lean();
     const map = {};
     for (const r of rows) map[`${r.date}|${r.time}`] = r.count;
     return map;

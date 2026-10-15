@@ -33,28 +33,28 @@ const heuristics = { parseSpelledName, extractPatientNameFromSpeech };
 
 const num = (v, d) => (v === undefined || v === "" || isNaN(Number(v)) ? d : Number(v));
 const CONF = {
-  endOfTurnMs: num(process.env.END_OF_TURN_MS, 1000),
+  endOfTurnMs: num(process.env.END_OF_TURN_MS, 700),
   maxUtteranceMs: num(process.env.MAX_UTTERANCE_MS, 15000),
   bargeIn: process.env.BARGE_IN !== "false",
   bargeInMs: num(process.env.BARGE_IN_MS, 450),
   bargeInGraceMs: num(process.env.BARGE_IN_GRACE_MS, 400),
-  fillerAfterMs: num(process.env.FILLER_AFTER_MS, 2800),
+  fillerAfterMs: num(process.env.FILLER_AFTER_MS, 3200),
   idleRepromptMs: num(process.env.IDLE_REPROMPT_MS, 9000),
   maxReprompts: num(process.env.MAX_REPROMPTS, 2),
-  echoCooldownMs: num(process.env.ECHO_COOLDOWN_MS, 250),
+  echoCooldownMs: num(process.env.ECHO_COOLDOWN_MS, 350),
   handoff: process.env.HUMAN_HANDOFF === "true",
 };
 
 const PHRASES = {
   greeting: realestateConfig.greeting,
-  fillers: ["हम्म, एक सेकंड।", "जी, देख रही हूँ।", "अच्छा, एक पल।"],
-  reprompts: ["हेलो, क्या आप लाइन पर हैं?", "मुझे आपकी आवाज़ नहीं आ रही, थोड़ा ज़ोर से बोलिए।"],
+  fillers: ["जी, एक सेकंड...", "जी, मैं चेक कर रही हूँ..."],
+  reprompts: ["हेलो, क्या आप लाइन पर हैं?", "माफ़ कीजिए, आवाज़ साफ़ नहीं आई, क्या आप सुन पा रहे हैं?"],
   goodbye: "लगता है लाइन में दिक्कत है। आप कभी भी दोबारा कॉल कर सकते हैं। धन्यवाद!",
-  sorry: "माफ़ कीजिए, आवाज़ थोड़ी कट गई। एक बार फिर से बताएँगे?",
+  sorry: "माफ़ कीजिए, आपकी आवाज़ साफ़ नहीं आ पाई। क्या आप दोबारा बताएँगे?",
   emergency: "यह इमरजेंसी लग रही है। कृपया तुरंत एक सौ बारह पर कॉल करें, या नज़दीकी अस्पताल जाएँ।",
   emergencyFollowUp: "क्या आप किसी प्रॉपर्टी की जानकारी या साइट विज़िट के लिए बात करना चाहते हैं?",
   handoff: realestateConfig.handoffReply,
-  closing: realestateConfig.closingReply || "बात करने के लिए धन्यवाद, आपका दिन शुभ हो!",
+  closing: realestateConfig.closingReply || "जी धन्यवाद, आपका दिन शुभ हो!",
 };
 
 const EMERGENCY_RE =
@@ -299,14 +299,14 @@ function handleCall(ws, deps, activeCalls, req) {
     preRollMs += chunkMs;
     while (preRollMs > 360 && preRoll.length > 1) preRollMs -= (preRoll.shift().length / (sampleRate * 2)) * 1000;
 
-    const speechThr = Math.max(380, Math.min(1800, noiseFloor * 1.6 + 100));
-    const keepThr = speechThr * 0.55;
+    const speechThr = Math.max(260, Math.min(1400, noiseFloor * 1.35 + 50));
+    const keepThr = Math.max(140, speechThr * 0.5);
 
     // Bot is talking: only a clear, sustained voice counts as barge-in
     if (isBotSpeaking()) {
       if (current?.noBargeIn) return;
       if (!CONF.bargeIn || Date.now() - current.startedAt < CONF.bargeInGraceMs) return;
-      const bargeThr = Math.max(1300, Math.min(2600, noiseFloor * 2.8 + 400));
+      const bargeThr = Math.max(1400, Math.min(2800, noiseFloor * 2.8 + 450));
       bargeLoudMs = rms > bargeThr ? bargeLoudMs + chunkMs : Math.max(0, bargeLoudMs - chunkMs);
       if (bargeLoudMs >= CONF.bargeInMs) {
         stopPlayback("barge-in");
