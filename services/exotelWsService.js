@@ -33,24 +33,24 @@ const heuristics = { parseSpelledName, extractPatientNameFromSpeech };
 
 const num = (v, d) => (v === undefined || v === "" || isNaN(Number(v)) ? d : Number(v));
 const CONF = {
-  endOfTurnMs: num(process.env.END_OF_TURN_MS, 700),
+  endOfTurnMs: num(process.env.END_OF_TURN_MS, 800),
   maxUtteranceMs: num(process.env.MAX_UTTERANCE_MS, 15000),
   bargeIn: process.env.BARGE_IN !== "false",
-  bargeInMs: num(process.env.BARGE_IN_MS, 450),
-  bargeInGraceMs: num(process.env.BARGE_IN_GRACE_MS, 400),
-  fillerAfterMs: num(process.env.FILLER_AFTER_MS, 3200),
+  bargeInMs: num(process.env.BARGE_IN_MS, 300),
+  bargeInGraceMs: num(process.env.BARGE_IN_GRACE_MS, 500),
+  fillerAfterMs: num(process.env.FILLER_AFTER_MS, 1300),
   idleRepromptMs: num(process.env.IDLE_REPROMPT_MS, 9000),
   maxReprompts: num(process.env.MAX_REPROMPTS, 2),
-  echoCooldownMs: num(process.env.ECHO_COOLDOWN_MS, 350),
+  echoCooldownMs: num(process.env.ECHO_COOLDOWN_MS, 250),
   handoff: process.env.HUMAN_HANDOFF === "true",
 };
 
 const PHRASES = {
   greeting: realestateConfig.greeting,
-  fillers: ["जी, एक सेकंड...", "जी, मैं चेक कर रही हूँ..."],
+  fillers: ["हम्म, एक सेकंड।", "जी, मैं चेक कर रही हूँ...", "अच्छा, एक पल।"],
   reprompts: ["जी, मैं सुन रही हूँ, बताइए?", "हेलो, क्या आप मुझे सुन पा रहे हैं?"],
   goodbye: "लगता है आवाज़ नहीं आ पा रही है। आप कभी भी दोबारा कॉल कर सकते हैं। धन्यवाद!",
-  sorry: "जी, आपकी आवाज़ थोड़ी धीमी आ रही है, क्या आप दोबारा बताएंगे?",
+  sorry: "माफ़ कीजिए, आवाज़ थोड़ी कट गई। एक बार फिर से बताएँगे?",
   emergency: "यह इमरजेंसी लग रही है। कृपया तुरंत एक सौ बारह पर कॉल करें, या नज़दीकी अस्पताल जाएँ।",
   emergencyFollowUp: "क्या आप किसी प्रॉपर्टी की जानकारी या साइट विज़िट के लिए बात करना चाहते हैं?",
   handoff: realestateConfig.handoffReply,

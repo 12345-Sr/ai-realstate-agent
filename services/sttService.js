@@ -255,7 +255,8 @@ async function transcribeWithWhisper(wavBuffer, { signal } = {}) {
  * Automatically falls back to secondary engine if primary returns empty/fails.
  */
 async function transcribePcmAudio(pcmBuffer, sampleRate = 8000, { signal } = {}) {
-  const minBytes = Math.floor(sampleRate * 2 * 0.15);
+  // Discard audio shorter than 0.35 seconds (line noise, clicks, breaths)
+  const minBytes = Math.floor(sampleRate * 2 * 0.35);
   if (!pcmBuffer || pcmBuffer.length < minBytes) {
     return "";
   }
@@ -264,14 +265,13 @@ async function transcribePcmAudio(pcmBuffer, sampleRate = 8000, { signal } = {})
   const filteredPcm = cleanAndIsolateVoice(pcmBuffer, sampleRate);
   const wavBuffer = pcmToWav(filteredPcm, sampleRate);
 
-  const engine = (process.env.STT_ENGINE || "gemini").toLowerCase();
+  const engine = (process.env.STT_ENGINE || "whisper").toLowerCase();
 
-  if (engine === "gemini") {
-    // 1. Try Gemini STT
-    const geminiText = await transcribeWithGemini(wavBuffer, { signal });
-    if (geminiText) return geminiText;
-    // Fallback to Whisper if Gemini couldn't transcribe
-    return await transcribeWithWhisper(wavBuffer, { signal });
+  if (engine === "whisper" || process.env.GROQ_API_KEY) {
+    const whisperText = await transcribeWithWhisper(wavBuffer, { signal });
+    if (whisperText) return whisperText;
+    // Fallback to Gemini if Whisper failed or was rate limited
+    return await transcribeWithGemini(wavBuffer, { signal });
   }
 
   if (engine === "deepgram" && process.env.DEEPGRAM_API_KEY) {
@@ -279,12 +279,11 @@ async function transcribePcmAudio(pcmBuffer, sampleRate = 8000, { signal } = {})
     if (deepgramText) return deepgramText;
   }
 
-  // Default: Whisper with bulletproof hallucination gating
-  const whisperText = await transcribeWithWhisper(wavBuffer, { signal });
-  if (whisperText) return whisperText;
+  // Gemini primary (if explicitly requested with no Groq key)
+  const geminiText = await transcribeWithGemini(wavBuffer, { signal });
+  if (geminiText) return geminiText;
 
-  // Fallback to Gemini if Whisper failed
-  return await transcribeWithGemini(wavBuffer, { signal });
+  return await transcribeWithWhisper(wavBuffer, { signal });
 }
 
 module.exports = {
