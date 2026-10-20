@@ -90,14 +90,9 @@ function slotProblem(doctor, dateIso, shift, clock = getClock()) {
   return null;
 }
 
-const mongoose = require("mongoose");
-
 async function bookedCounts(doctorName, dates) {
-  if (mongoose.connection.readyState !== 1) return {};
   try {
-    const rows = await models.SlotCounter.find({ doctorName, date: { $in: dates } })
-      .maxTimeMS(800)
-      .lean();
+    const rows = await models.SlotCounter.find({ doctorName, date: { $in: dates } }).lean();
     const map = {};
     for (const r of rows) map[`${r.date}|${r.time}`] = r.count;
     return map;
@@ -174,7 +169,7 @@ async function reserveSlot(doctorName, date, time) {
 }
 
 async function releaseSlot(doctorName, date, time) {
-  await models.SlotCounter.updateOne({ doctorName, date, time, count: { $gt: 0 } }, { $inc: { count: -1 } }).catch(() => {});
+  await models.SlotCounter.updateOne({ doctorName, date, time, count: { $gt: 0 } }, { $inc: { count: -1 } }).catch(() => { });
 }
 
 /**
